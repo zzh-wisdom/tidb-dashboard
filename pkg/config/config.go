@@ -14,22 +14,16 @@
 package config
 
 import (
-	"context"
 	"crypto/tls"
-	"sync"
-	"sync/atomic"
-
-	keyvisualconfig "github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/keyvisual/config"
 )
 
 type Config struct {
-	Ctx        context.Context
-	Wg         sync.WaitGroup
 	Version    string
 	DataDir    string
 	PDEndPoint string
 	// 安全传输层协议（TLS）用于在两个通信应用程序之间提供保密性和数据完整性。
 	TLSConfig  *tls.Config
+/*<<<<<<< HEAD
 
 	// core api mode or file mod
 	KeyVisualConfig *keyvisualconfig.Config
@@ -56,4 +50,6 @@ func SetGlobalConfig(cfg *Config) {
 
 func GetGlobalConfig() *Config {
 	return globalConfig.Load().(*Config)
+=======*/
+//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6
 }

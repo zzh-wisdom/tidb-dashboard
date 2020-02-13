@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/keyvisual/info"
+	regionPKG "github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
 )
 
 // RegionInfo records detail region info for api usage.
@@ -57,26 +57,26 @@ func (rs *RegionsInfo) GetKeys() []string {
 	return keys
 }
 
-func (rs *RegionsInfo) GetValues(tag info.StatTag) []uint64 {
+func (rs *RegionsInfo) GetValues(tag regionPKG.StatTag) []uint64 {
 	values := make([]uint64, rs.Count)
 	switch tag {
-	case info.WrittenBytes:
+	case regionPKG.WrittenBytes:
 		for i, region := range rs.Regions {
 			values[i] = region.WrittenBytes
 		}
-	case info.ReadBytes:
+	case regionPKG.ReadBytes:
 		for i, region := range rs.Regions {
 			values[i] = region.ReadBytes
 		}
-	case info.WrittenKeys:
+	case regionPKG.WrittenKeys:
 		for i, region := range rs.Regions {
 			values[i] = region.WrittenKeys
 		}
-	case info.ReadKeys:
+	case regionPKG.ReadKeys:
 		for i, region := range rs.Regions {
 			values[i] = region.ReadKeys
 		}
-	case info.Integration:
+	case regionPKG.Integration:
 		for i, region := range rs.Regions {
 			values[i] = region.WrittenBytes + region.ReadBytes
 		}
@@ -102,9 +102,14 @@ func read(stream io.ReadCloser) (*RegionsInfo, error) {
 			if err != nil {
 				break
 			}
+/*<<<<<<< HEAD:pkg/apiserver/keyvisual/input/api.go
 			// zeroCopy的bytes转成string的方法
 			region.StartKey = info.String(startBytes)
 			region.EndKey = info.String(endBytes)
+=======*/
+			region.StartKey = regionPKG.String(startBytes)
+			region.EndKey = regionPKG.String(endBytes)
+//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6:pkg/keyvisual/input/api.go
 		}
 	}
 	if err == nil {
@@ -116,9 +121,9 @@ func read(stream io.ReadCloser) (*RegionsInfo, error) {
 	return regions, err
 }
 
-func NewAPIPeriodicGetter(pdAddr string) info.RegionsInfoGenerator {
+func NewAPIPeriodicGetter(pdAddr string) regionPKG.RegionsInfoGenerator {
 	addr := fmt.Sprintf("%s/pd/api/v1/regions", pdAddr)
-	return func() (regionsInfo info.RegionsInfo, err error) {
+	return func() (regionsInfo regionPKG.RegionsInfo, err error) {
 		resp, err := http.Get(addr) //nolint:bodyclose,gosec
 		if err == nil {
 			return read(resp.Body)

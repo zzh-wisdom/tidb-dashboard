@@ -23,14 +23,19 @@ import (
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/foo"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/info"
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/keyvisual"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual"
 )
 
 var once sync.Once
 
-func Handler(apiPrefix string, config *config.Config, db *dbstore.DB) http.Handler {
+type Services struct {
+	Store     *dbstore.DB
+	KeyVisual *keyvisual.Service
+}
+
+func Handler(apiPrefix string, config *config.Config, services *Services) http.Handler {
 	once.Do(func() {
 		// These global modification will be effective only for the first invoke.
 		// 这里使用了gin框架
@@ -46,10 +51,15 @@ func Handler(apiPrefix string, config *config.Config, db *dbstore.DB) http.Handl
 
 	//注册一个打招呼的响应？！
 	foo.NewService(config).Register(endpoint)
+/*<<<<<<< HEAD
 	// 注册一个获取信息的响应
 	info.NewService(config, db).Register(endpoint)
 	// 注册keyvisual服务
 	keyvisual.NewService(config, db).Register(endpoint)
+=======*/
+	info.NewService(config, services.Store).Register(endpoint)
+	services.KeyVisual.Register(endpoint)
+//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6
 
 	return r
 }
