@@ -33,17 +33,22 @@ var once sync.Once
 func Handler(apiPrefix string, config *config.Config, db *dbstore.DB) http.Handler {
 	once.Do(func() {
 		// These global modification will be effective only for the first invoke.
+		// 这里使用了gin框架
 		gin.SetMode(gin.ReleaseMode)
 	})
 
+	// 这里使用gin框架生成http.handler,需学习具体用法
 	r := gin.New()
 	r.Use(cors.Default())
 	r.Use(gin.Recovery())
 	r.Use(gzip.Gzip(gzip.BestSpeed))
 	endpoint := r.Group(apiPrefix)
 
+	//注册一个打招呼的响应？！
 	foo.NewService(config).Register(endpoint)
+	// 注册一个获取信息的响应
 	info.NewService(config, db).Register(endpoint)
+	// 注册keyvisual服务
 	keyvisual.NewService(config, db).Register(endpoint)
 
 	return r

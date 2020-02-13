@@ -19,6 +19,7 @@ import (
 
 type Config struct {
 	// api or core mode
+	// type RegionsInfoGenerator func() (RegionsInfo, error)
 	PeriodicGetter info.RegionsInfoGenerator
 	// file mode
 	FileStartTime int64

@@ -60,6 +60,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 			syscall.SIGTERM,
 			syscall.SIGQUIT)
 		<-sc
+		// 只要收到上述的信号，就退出
 		cancel()
 	}()
 
@@ -81,6 +82,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.Parse()
 
 	if cfg.Version {
+		// 打印版本信息退出
 		utils.PrintInfo()
 		exit(0)
 	}
@@ -110,8 +112,12 @@ func main() {
 	defer log.Sync() //nolint:errcheck
 
 	mux := http.DefaultServeMux
+	// 这个ui暂时未实现
 	mux.Handle("/dashboard/", http.StripPrefix("/dashboard", uiserver.Handler()))
+	// 做了一层中间件，开启一些后台获取数据的线程
+	// 这里提供keyvisual服务
 	mux.Handle("/dashboard/api/", apiserver.Handler("/dashboard/api", cliConfig.CoreConfig, store))
+	// 这个也暂未实现
 	mux.Handle("/dashboard/api/swagger/", swaggerserver.Handler())
 
 	listenAddr := fmt.Sprintf("%s:%d", cliConfig.ListenHost, cliConfig.ListenPort)
@@ -131,13 +137,16 @@ func main() {
 	srv := &http.Server{Handler: mux}
 	cliConfig.CoreConfig.Wg.Add(1)
 	go func() {
+		// 类似简单的ListenAndServe方法，这里只是自定义listener
 		if err := srv.Serve(listener); err != http.ErrServerClosed {
 			log.Fatal("Can not stop server", zap.Error(err))
 		}
 		cliConfig.CoreConfig.Wg.Done()
 	}()
 
+	// 这里卡住，直到关闭
 	<-cliConfig.CoreConfig.Ctx.Done()
+	// 关闭服务器
 	if err := srv.Shutdown(context.Background()); err != nil {
 		log.Fatal("Can not stop server", zap.Error(err))
 	}

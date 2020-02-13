@@ -31,6 +31,7 @@ type DB struct {
 }
 
 func MustOpenDBStore(config *config.Config) *DB {
+	// 建立文件路径
 	err := os.MkdirAll(config.DataDir, 0777)
 	if err != nil {
 		log.Fatal("Failed to create Dashboard storage directory", zap.Error(err))

@@ -102,11 +102,13 @@ func read(stream io.ReadCloser) (*RegionsInfo, error) {
 			if err != nil {
 				break
 			}
+			// zeroCopy的bytes转成string的方法
 			region.StartKey = info.String(startBytes)
 			region.EndKey = info.String(endBytes)
 		}
 	}
 	if err == nil {
+		// 对regions按照startKey排序
 		sort.Slice(regions.Regions, func(i, j int) bool {
 			return regions.Regions[i].StartKey < regions.Regions[j].StartKey
 		})
