@@ -3,7 +3,6 @@ module github.com/pingcap-incubator/tidb-dashboard
 go 1.13
 
 require (
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/gin-contrib/cors v1.3.0
 	github.com/gin-contrib/gzip v0.0.1
