@@ -16,6 +16,9 @@
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 // @BasePath /dashboard/api
+// @securityDefinitions.apikey JwtAuth
+// @in header
+// @name Authorization
 
 package main
 
@@ -31,27 +34,30 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/joho/godotenv"
 	"github.com/pingcap/log"
-	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
+	http2 "github.com/pingcap-incubator/tidb-dashboard/pkg/http"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual"
-	keyvisualInput "github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/input"
-	keyvisualRegion "github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
+	keyvisualinput "github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/input"
+	keyvisualregion "github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/pd"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/swaggerserver"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/tidb"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/uiserver"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/utils"
 )
 
 type DashboardCLIConfig struct {
-	Version    bool
-	ListenHost string
-	ListenPort int
-	CoreConfig *config.Config
+	ListenHost     string
+	ListenPort     int
+	EnableDebugLog bool
+	CoreConfig     *config.Config
 	// key-visual file mode for debug
 	KVFileStartTime int64
 	KVFileEndTime   int64
@@ -59,35 +65,17 @@ type DashboardCLIConfig struct {
 
 // NewCLIConfig generates the configuration of the dashboard in standalone mode.
 func NewCLIConfig() *DashboardCLIConfig {
-/*<<<<<<< HEAD
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		sc := make(chan os.Signal, 1)
-		signal.Notify(sc,
-			syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT)
-		<-sc
-		// 只要收到上述的信号，就退出
-		cancel()
-	}()
-
-	cfg := &DashboardCLIConfig{
-		CoreConfig: config.NewConfig(ctx, utils.ReleaseVersion),
-	}
-=======*/
 	cfg := &DashboardCLIConfig{}
 	cfg.CoreConfig = &config.Config{}
-	cfg.CoreConfig.Version = utils.ReleaseVersion
-//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6
 
-	flag.BoolVar(&cfg.Version, "V", false, "Print version information and exit")
-	flag.BoolVar(&cfg.Version, "version", false, "Print version information and exit")
+	var showVersion bool
+	flag.BoolVar(&showVersion, "v", false, "Print version information and exit")
+	flag.BoolVar(&showVersion, "version", false, "Print version information and exit")
 	flag.StringVar(&cfg.ListenHost, "host", "0.0.0.0", "The listen address of the Dashboard Server")
 	flag.IntVar(&cfg.ListenPort, "port", 12333, "The listen port of the Dashboard Server")
 	flag.StringVar(&cfg.CoreConfig.DataDir, "data-dir", "/tmp/dashboard-data", "Path to the Dashboard Server data directory")
 	flag.StringVar(&cfg.CoreConfig.PDEndPoint, "pd", "http://127.0.0.1:2379", "The PD endpoint that Dashboard Server connects to")
+	flag.BoolVar(&cfg.EnableDebugLog, "debug", false, "Enable debug logs")
 	// debug for keyvisual
 	// TODO: Hide help information
 	flag.Int64Var(&cfg.KVFileStartTime, "keyvis-file-start", 0, "(debug) start time for file range in file mode")
@@ -95,8 +83,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 
 	flag.Parse()
 
-	if cfg.Version {
-		// 打印版本信息退出
+	if showVersion {
 		utils.PrintInfo()
 		exit(0)
 	}
@@ -114,7 +101,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	return cfg
 }
 
-func getContext() (context.Context, *sync.WaitGroup) {
+func getContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		sc := make(chan os.Signal, 1)
@@ -126,67 +113,77 @@ func getContext() (context.Context, *sync.WaitGroup) {
 		<-sc
 		cancel()
 	}()
-	wg := &sync.WaitGroup{}
-	return ctx, wg
+	return ctx
 }
 
 func main() {
+	_ = godotenv.Load()
 	// Flushing any buffered log entries
 	defer log.Sync() //nolint:errcheck
 
 	cliConfig := NewCLIConfig()
-	ctx, wg := getContext()
+	ctx := getContext()
 
 	store := dbstore.MustOpenDBStore(cliConfig.CoreConfig)
 	defer store.Close() //nolint:errcheck
 
-	etcdClient := pd.NewEtcdClient(cliConfig.CoreConfig)
+	etcdProvider, err := pd.NewLocalEtcdClientProvider(cliConfig.CoreConfig)
+	if err != nil {
+		_ = store.Close()
+		log.Fatal("Cannot create etcd client", zap.Error(err))
+	}
+
+	tidbForwarder := tidb.NewForwarder(tidb.NewForwarderConfig(), etcdProvider)
+	// FIXME: Handle open error
+	tidbForwarder.Open()        //nolint:errcheck
+	defer tidbForwarder.Close() //nolint:errcheck
+
+	httpClient := http2.NewHTTPClientWithConf(cliConfig.CoreConfig)
 
 	// key visual
-	remoteDataProvider := &keyvisualRegion.PDDataProvider{
+	remoteDataProvider := &keyvisualregion.PDDataProvider{
 		FileStartTime:  cliConfig.KVFileStartTime,
 		FileEndTime:    cliConfig.KVFileEndTime,
-		PeriodicGetter: keyvisualInput.NewAPIPeriodicGetter(cliConfig.CoreConfig.PDEndPoint),
-		GetEtcdClient: func() *clientv3.Client {
-			return etcdClient
-		},
-		Store: store,
+		PeriodicGetter: keyvisualinput.NewAPIPeriodicGetter(cliConfig.CoreConfig.PDEndPoint),
+		EtcdProvider:   etcdProvider,
+		Store:          store,
 	}
-	keyvisualService := keyvisual.NewService(ctx, wg, cliConfig.CoreConfig, remoteDataProvider)
+	keyvisualService := keyvisual.NewService(ctx, cliConfig.CoreConfig, remoteDataProvider)
 	keyvisualService.Start()
+	defer keyvisualService.Close()
 
 	services := &apiserver.Services{
-		Store:     store,
-		KeyVisual: keyvisualService,
+		Store:         store,
+		KeyVisual:     keyvisualService,
+		TiDBForwarder: tidbForwarder,
+		EtcdProvider:  etcdProvider,
+		HTTPClient:    httpClient,
 	}
 	mux := http.DefaultServeMux
 	// 这个ui暂时未实现
 	mux.Handle("/dashboard/", http.StripPrefix("/dashboard", uiserver.Handler()))
-/*<<<<<<< HEAD
-	// 做了一层中间件，开启一些后台获取数据的线程
-	// 这里提供keyvisual服务
-	mux.Handle("/dashboard/api/", apiserver.Handler("/dashboard/api", cliConfig.CoreConfig, store))
-	// 这个也暂未实现
-=======*/
+
 	mux.Handle("/dashboard/api/", apiserver.Handler("/dashboard/api", cliConfig.CoreConfig, services))
-//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6
 	mux.Handle("/dashboard/api/swagger/", swaggerserver.Handler())
 
 	listenAddr := fmt.Sprintf("%s:%d", cliConfig.ListenHost, cliConfig.ListenPort)
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
+		_ = store.Close()
 		log.Fatal("Dashboard server listen failed", zap.String("addr", listenAddr), zap.Error(err))
-		store.Close() //nolint:errcheck
-		exit(1)
 	}
 
 	utils.LogInfo()
+	if cliConfig.EnableDebugLog {
+		log.SetLevel(zapcore.DebugLevel)
+	}
 	log.Info(fmt.Sprintf("Dashboard server is listening at %s", listenAddr))
 	log.Info(fmt.Sprintf("UI:      http://127.0.0.1:%d/dashboard/", cliConfig.ListenPort))
 	log.Info(fmt.Sprintf("API:     http://127.0.0.1:%d/dashboard/api/", cliConfig.ListenPort))
 	log.Info(fmt.Sprintf("Swagger: http://127.0.0.1:%d/dashboard/api/swagger/", cliConfig.ListenPort))
 
 	srv := &http.Server{Handler: mux}
+	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		// 类似简单的ListenAndServe方法，这里只是自定义listener
@@ -195,25 +192,15 @@ func main() {
 		}
 		wg.Done()
 	}()
-
-/*<<<<<<< HEAD
-	// 这里卡住，直到关闭
-	<-cliConfig.CoreConfig.Ctx.Done()
-	// 关闭服务器
-=======*/
 	<-ctx.Done()
-//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6
 	if err := srv.Shutdown(context.Background()); err != nil {
 		log.Fatal("Can not stop server", zap.Error(err))
 	}
-
-	// waiting for other goroutines
 	wg.Wait()
-
 	log.Info("Stop dashboard server")
 }
 
 func exit(code int) {
-	log.Sync() //nolint:errcheck
+	_ = log.Sync()
 	os.Exit(code)
 }

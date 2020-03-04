@@ -14,25 +14,40 @@
 package apiserver
 
 import (
+	"html/template"
 	"net/http"
 	"sync"
 
-	"github.com/gin-contrib/cors"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/pd"
+
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 
+	cors "github.com/rs/cors/wrapper/gin"
+
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/clusterinfo"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/diagnose"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/foo"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/info"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/logsearch"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/profiling"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/statement"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/user"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/utils"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/tidb"
 )
 
 var once sync.Once
 
 type Services struct {
-	Store     *dbstore.DB
-	KeyVisual *keyvisual.Service
+	Store         *dbstore.DB
+	TiDBForwarder *tidb.Forwarder
+	KeyVisual     *keyvisual.Service
+	EtcdProvider  pd.EtcdProvider
+	HTTPClient    *http.Client
 }
 
 func Handler(apiPrefix string, config *config.Config, services *Services) http.Handler {
@@ -44,22 +59,27 @@ func Handler(apiPrefix string, config *config.Config, services *Services) http.H
 
 	// 这里使用gin框架生成http.handler,需学习具体用法
 	r := gin.New()
-	r.Use(cors.Default())
+	r.Use(cors.AllowAll())
 	r.Use(gin.Recovery())
 	r.Use(gzip.Gzip(gzip.BestSpeed))
-	endpoint := r.Group(apiPrefix)
+	r.Use(utils.MWHandleErrors())
 
-	//注册一个打招呼的响应？！
-	foo.NewService(config).Register(endpoint)
-/*<<<<<<< HEAD
-	// 注册一个获取信息的响应
-	info.NewService(config, db).Register(endpoint)
-	// 注册keyvisual服务
-	keyvisual.NewService(config, db).Register(endpoint)
-=======*/
-	info.NewService(config, services.Store).Register(endpoint)
-	services.KeyVisual.Register(endpoint)
-//>>>>>>> 01c268ed0406d52dac4f04d2872978f70a1370b6
+	endpoint := r.Group(apiPrefix)
+	auth := user.NewAuthService(services.TiDBForwarder)
+	auth.Register(endpoint)
+
+	foo.NewService(config).Register(endpoint, auth)
+	info.NewService(config, services.TiDBForwarder, services.Store).Register(endpoint, auth)
+	clusterinfo.NewService(config, services.EtcdProvider, services.HTTPClient).Register(endpoint, auth)
+	profiling.NewService(config, services.Store).Register(endpoint)
+	services.KeyVisual.Register(endpoint, auth)
+	logsearch.NewService(config, services.Store).Register(endpoint, auth)
+	statement.NewService(config, services.TiDBForwarder).Register(endpoint, auth)
+	diagnose.NewService(config, services.TiDBForwarder, services.Store, NewTemplate(r, "diagnose")).Register(endpoint, auth)
 
 	return r
+}
+
+func NewTemplate(r *gin.Engine, name string) *template.Template {
+	return template.New(name).Funcs(r.FuncMap)
 }

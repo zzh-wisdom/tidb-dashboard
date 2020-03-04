@@ -26,6 +26,9 @@ import (
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/user"
+	// Import for swag go doc
+	_ "github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/utils"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/input"
@@ -51,7 +54,10 @@ var (
 )
 
 type Service struct {
-	wg       *sync.WaitGroup
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
 	config   *config.Config
 	provider *region.PDDataProvider
 
@@ -60,19 +66,20 @@ type Service struct {
 	strategy matrix.Strategy
 }
 
-func NewService(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, provider *region.PDDataProvider) *Service {
-	in := input.NewStatInput(ctx, provider)
-	labelStrategy := decorator.TiDBLabelStrategy(ctx, provider)
-	strategy := matrix.DistanceStrategy(ctx, wg, labelStrategy, 1.0/math.Phi, 15, 50)
-	stat := storage.NewStat(ctx, wg, provider, defaultStatConfig, strategy, in.GetStartTime())
-	return &Service{
-		wg:       wg,
+func NewService(ctx context.Context, cfg *config.Config, provider *region.PDDataProvider) *Service {
+	ctx, cancel := context.WithCancel(ctx)
+	srv := &Service{
+		ctx:      ctx,
+		cancel:   cancel,
 		config:   cfg,
 		provider: provider,
-		in:       in,
-		stat:     stat,
-		strategy: strategy,
 	}
+	wg := &srv.wg
+	srv.in = input.NewStatInput(ctx, provider)
+	labelStrategy := decorator.TiDBLabelStrategy(ctx, provider)
+	srv.strategy = matrix.DistanceStrategy(ctx, wg, labelStrategy, 1.0/math.Phi, 15, 50)
+	srv.stat = storage.NewStat(ctx, wg, provider, defaultStatConfig, srv.strategy, srv.in.GetStartTime())
+	return srv
 }
 
 func (s *Service) Start() {
@@ -87,8 +94,14 @@ func (s *Service) Start() {
 	}()
 }
 
-func (s *Service) Register(r *gin.RouterGroup) {
+func (s *Service) Close() {
+	s.cancel()
+	s.wg.Wait()
+}
+
+func (s *Service) Register(r *gin.RouterGroup, auth *user.AuthService) {
 	endpoint := r.Group("/keyvisual")
+	endpoint.Use(auth.MWAuthRequired())
 	endpoint.GET("/heatmaps", s.heatmapsHandler)
 }
 
@@ -102,6 +115,8 @@ func (s *Service) Register(r *gin.RouterGroup) {
 // @Param type query string false "Main types of data" Enums(written_bytes, read_bytes, written_keys, read_keys, integration)
 // @Success 200 {object} matrix.Matrix
 // @Router /keyvisual/heatmaps [get]
+// @Security JwtAuth
+// @Failure 401 {object} utils.APIError "Unauthorized failure"
 func (s *Service) heatmapsHandler(c *gin.Context) {
 	startKey := c.Query("startkey")
 	endKey := c.Query("endkey")
@@ -134,7 +149,7 @@ func (s *Service) heatmapsHandler(c *gin.Context) {
 		return
 	}
 
-	log.Info("Request matrix",
+	log.Debug("Request matrix",
 		zap.Time("start-time", startTime),
 		zap.Time("end-time", endTime),
 		zap.String("start-key", startKey),
