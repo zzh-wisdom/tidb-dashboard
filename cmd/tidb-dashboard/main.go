@@ -128,7 +128,7 @@ func main() {
 
 	store := dbstore.MustOpenDBStore(cliConfig.CoreConfig)
 	defer store.Close() //nolint:errcheck
-
+	//LocalEtcdProvider
 	etcdProvider, err := pd.NewLocalEtcdClientProvider(cliConfig.CoreConfig)
 	if err != nil {
 		_ = store.Close()
@@ -147,6 +147,7 @@ func main() {
 		FileStartTime:  cliConfig.KVFileStartTime,
 		FileEndTime:    cliConfig.KVFileEndTime,
 		PeriodicGetter: keyvisualinput.NewAPIPeriodicGetter(cliConfig.CoreConfig.PDEndPoint),
+		// 结构类型
 		EtcdProvider:   etcdProvider,
 		Store:          store,
 	}

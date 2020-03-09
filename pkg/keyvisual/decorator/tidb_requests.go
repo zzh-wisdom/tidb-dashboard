@@ -66,6 +66,7 @@ func (s *tidbLabelStrategy) updateAddress() {
 		var tidbAddress []string
 		ectx, cancel := context.WithTimeout(s.Ctx, etcdGetTimeout)
 		resp, err := cli.Get(ectx, pd.TiDBServerInformationPath, clientv3.WithPrefix())
+		// 这个的作用还需要学习
 		cancel()
 		if err != nil {
 			log.Warn("get key failed", zap.String("key", pd.TiDBServerInformationPath), zap.Error(err))
