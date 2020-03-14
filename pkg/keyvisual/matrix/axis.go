@@ -17,8 +17,8 @@ package matrix
 // the StartKey of its next bucket. The actual data structure is stored in columns. Therefore satisfies:
 // len(Keys) == len(ValuesList[i]) + 1. In particular, ValuesList[0] is the base column.
 type Axis struct {
-	Keys       []string
-	ValuesList [][]uint64
+	Keys       []string   `json:"keys,omitempty"`
+	ValuesList [][]uint64 `json:"values_list,omitempty"`
 }
 
 // CreateAxis checks the given parameters and uses them to build the Axis.

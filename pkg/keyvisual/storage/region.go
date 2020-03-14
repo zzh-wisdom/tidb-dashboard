@@ -25,8 +25,7 @@ import (
 const (
 	// preThreshold   = 128
 	// preRatioTarget = 512
-	preTarget = 3072
-
+	preTarget  = 3072
 	dirtyValue = 1 << 30
 )
 

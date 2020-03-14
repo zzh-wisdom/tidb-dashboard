@@ -187,7 +187,7 @@ func main() {
 		EtcdProvider:   etcdProvider,
 		Store:          store,
 	}
-	keyvisualService := keyvisual.NewService(ctx, cliConfig.CoreConfig, remoteDataProvider, httpClient)
+	keyvisualService := keyvisual.NewService(ctx, cliConfig.CoreConfig, remoteDataProvider, httpClient, store)
 	keyvisualService.Start()
 	defer keyvisualService.Close()
 

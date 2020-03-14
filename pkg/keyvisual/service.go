@@ -30,6 +30,7 @@ import (
 	// Import for swag go doc
 	_ "github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/utils"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/input"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
@@ -66,7 +67,7 @@ type Service struct {
 	strategy matrix.Strategy
 }
 
-func NewService(ctx context.Context, cfg *config.Config, provider *region.PDDataProvider, httpClient *http.Client) *Service {
+func NewService(ctx context.Context, cfg *config.Config, provider *region.PDDataProvider, httpClient *http.Client, db *dbstore.DB) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	srv := &Service{
 		ctx:      ctx,
@@ -78,11 +79,13 @@ func NewService(ctx context.Context, cfg *config.Config, provider *region.PDData
 	srv.in = input.NewStatInput(ctx, provider)
 	labelStrategy := decorator.TiDBLabelStrategy(ctx, cfg, provider, httpClient)
 	srv.strategy = matrix.DistanceStrategy(ctx, wg, labelStrategy, 1.0/math.Phi, 15, 50)
-	srv.stat = storage.NewStat(ctx, wg, provider, defaultStatConfig, srv.strategy, srv.in.GetStartTime())
+	srv.stat = storage.NewStat(ctx, wg, provider, defaultStatConfig, srv.strategy, srv.in.GetStartTime(), db)
 	return srv
 }
 
 func (s *Service) Start() {
+	s.stat.Load()
+
 	s.wg.Add(2)
 	go func() {
 		s.strategy.Background()
