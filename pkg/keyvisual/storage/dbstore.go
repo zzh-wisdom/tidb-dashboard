@@ -196,6 +196,14 @@ func (p Plane) UnmarshalMode(mode int) (matrix.Axis, error) {
 	return axis, err
 }
 
+func NewPlane(time time.Time, num uint8, axis []byte) *Plane {
+	return &Plane{
+		time,
+		num,
+		axis,
+	}
+}
+
 // Check if the `table` exists
 func checkTable(db *dbstore.DB, table string) bool {
 	return db.HasTable(table)

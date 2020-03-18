@@ -78,10 +78,11 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 // Reduce merges ratio axes and append to next layerStat
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
-		plane, err := NewPlaneMode(s.StartTime, s.Num, matrix.Axis{}, Mode)
-		log.Debug("New Plane", zap.Error(err))
-		err = s.Db.Where(plane).Delete(&Plane{}).Error
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Time("Time", s.StartTime), zap.Error(err))
+		// 有问题
+		//plane := NewPlane(s.StartTime, s.Num, nil)
+		//err := s.Db.Where(plane).Delete(&Plane{}).Error
+		err := s.Db.Where("layer_num = ? AND time = ?", s.Num, s.StartTime).Delete(&Plane{}).Error
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
 		s.RingAxes[s.Head] = matrix.Axis{}
@@ -94,10 +95,11 @@ func (s *layerStat) Reduce() {
 	axes := make([]matrix.Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
-		plane, err := NewPlaneMode(s.StartTime, s.Num, matrix.Axis{}, Mode)
-		log.Debug("New Plane", zap.Error(err))
-		err = s.Db.Where(plane).Delete(&Plane{}).Error
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Time("Time", s.StartTime), zap.Error(err))
+		// 有问题
+		//plane := NewPlane(s.StartTime, s.Num, nil)
+		//err := s.Db.Where(plane).Delete(&Plane{}).Error
+		err := s.Db.Where("layer_num = ? AND time = ?", s.Num, s.StartTime).Delete(&Plane{}).Error
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
@@ -120,14 +122,9 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 		s.Reduce()
 	}
 
-	//isSorted := stringsAreSorted(axis.Keys)
-	//fmt.Println("Append isSorted:", isSorted)
 	plane, _ := NewPlaneMode(endTime, s.Num, axis, Mode)
-	//log.Debug("New Plane", zap.Error(err), zap.Int("key len", len(axis.Keys)),
-	//	zap.Int("type num", len(axis.ValuesList)), zap.Int("statices num", len(axis.ValuesList[0])))
 	err := s.Db.Create(plane).Error
-	log.Debug("Insert Plane", zap.Error(err))
-	//log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Time("Time", endTime), zap.Error( err))
+	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error( err))
 
 	s.RingAxes[s.Tail] = axis
 	s.RingTimes[s.Tail] = endTime
@@ -264,9 +261,8 @@ func (s *Stat) Load() {
 	// 存储各层的起始时间轴
 	createStartPlanes := func() {
 		for i, layer := range s.layers {
-			plane, err := NewPlaneMode(layer.StartTime, uint8(i), matrix.Axis{}, Mode)
-			log.Debug("New Plane", zap.Error(err))
-			err = s.db.Create(plane).Error
+			plane := NewPlane(layer.StartTime, uint8(i), nil)
+			err := s.db.Create(plane).Error
 			log.Debug("Insert startTime planes", zap.Uint8("Num", uint8(i)), zap.Time("Num", layer.StartTime), zap.Error(err))
 		}
 	}
@@ -293,8 +289,8 @@ func (s *Stat) Load() {
 
 	for ; ; num++ {
 		err := s.db.Where("layer_num = ?", num).Order("Time").Find(&planes).Error
-		fmt.Println("num:", num)
 		//fmt.Println(planes.)
+		fmt.Println("num:", num, "len(planes)", len(planes)-1)
 		if err != nil || len(planes) == 0 {
 			break
 		}
@@ -311,34 +307,41 @@ func (s *Stat) Load() {
 		}
 		// 第一个数据Plane用于保存该层的起始时间
 		s.layers[num].StartTime = planes[0].Time
-		s.layers[num].EndTime = planes[len(planes)-1].Time
 		s.layers[num].Head = 0
-		s.layers[num].Tail = len(planes) - 1
+		n := len(planes) - 1
+		if n > s.layers[num].Len {
+			n = s.layers[num].Len
+			log.Warn("len(plane) higher than Len", zap.Int("len(plane)", len(planes)-1), zap.Int("Len", s.layers[num].Len))
+			err := s.db.Where("layer_num = ? AND time > ?", num, planes[n].Time).Delete(&Plane{}).Error
+			log.Debug("Delete warning planes", zap.Error(err))
+		}
+		s.layers[num].EndTime = planes[n].Time
+		s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
 
-		for i, plane := range planes[1:] {
+		for i, plane := range planes[1:n+1] {
 			s.layers[num].RingTimes[i] = plane.Time
 			axis, err := plane.UnmarshalMode(Mode)
 			if err != nil {
 				panic("Unexpected error!")
 			}
-			isSorted := stringsAreSorted(axis.Keys)
-			fmt.Println("isSorted:", isSorted)
+			//isSorted := stringsAreSorted(axis.Keys)
+			//fmt.Println("isSorted:", isSorted)
 			s.keyMap.SaveKeys(axis.Keys)
 			s.layers[num].RingAxes[i] = axis
-			fmt.Println("load key len:", len(axis.Keys), "type num:", len(axis.ValuesList), "statices num:", len(axis.ValuesList[0]))
-			log.Debug("Load plane", zap.Uint8("Num", uint8(num)), zap.Time("S", plane.Time))
+			//fmt.Println("load key len:", len(axis.Keys), "type num:", len(axis.ValuesList), "statices num:", len(axis.ValuesList[0]))
+			//log.Debug("Load plane", zap.Uint8("Num", uint8(num)), zap.Time("S", plane.Time))
 		}
 	}
 
 	if num == 0 {
 		createStartPlanes()
 	}
-	//for _, layer := range s.layers {
-	//	fmt.Println("Num:", layer.Num)
-	//	fmt.Println("StartTime:", layer.StartTime, "EndTime:", layer.EndTime)
-	//	fmt.Println("Head:", layer.Head, "Tail:", layer.Tail, "Len:", layer.Len, "Empty:", layer.Empty)
-	//	fmt.Println("len(RingAxes):", len(layer.RingAxes))
-	//}
+	for _, layer := range s.layers {
+		fmt.Println("Num:", layer.Num)
+		fmt.Println("StartTime:", layer.StartTime, "EndTime:", layer.EndTime)
+		fmt.Println("Head:", layer.Head, "Tail:", layer.Tail, "Len:", layer.Len, "Empty:", layer.Empty)
+		fmt.Println("len(RingAxes):", len(layer.RingAxes))
+	}
 }
 
 func (s *Stat) rebuildKeyMap() {
