@@ -231,6 +231,8 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 		},
 	})
 
+	s.Load()
+
 	return s
 }
 
