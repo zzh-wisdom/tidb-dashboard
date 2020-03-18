@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -33,7 +34,7 @@ func TestDbstore(t *testing.T) {
 	//	RingTimes: ringTimes,
 	//}
 	axis := matrix.Axis{
-		Keys: []string{"a", "b", "c"},
+		Keys: []string{"\ucdcd\u1243\u2364", "b", "c"},
 		ValuesList: [][]uint64{
 			{1, 1},
 			{2, 2},
@@ -49,6 +50,8 @@ func TestDbstore(t *testing.T) {
 	err = json.Unmarshal(bytes, &axis2)
 	fmt.Println(err)
 	fmt.Println(axis2)
+
+	fmt.Println(reflect.DeepEqual(axis,axis2))
 
 	emptyAxis := matrix.Axis{}
 	bytes, err = json.Marshal(emptyAxis)
