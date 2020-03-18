@@ -51,7 +51,7 @@ func TestDbstore(t *testing.T) {
 	fmt.Println(err)
 	fmt.Println(axis2)
 
-	fmt.Println(reflect.DeepEqual(axis,axis2))
+	fmt.Println(reflect.DeepEqual(axis, axis2))
 
 	emptyAxis := matrix.Axis{}
 	bytes, err = json.Marshal(emptyAxis)

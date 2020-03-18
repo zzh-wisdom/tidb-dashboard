@@ -52,8 +52,8 @@ func buildMatrixAxisFromAxis(axis Axis) matrix.Axis {
 }
 
 type Plane struct {
-	Time time.Time
-	LayerNum  uint8  `gorm:"column:layer_num"`
+	Time     time.Time
+	LayerNum uint8 `gorm:"column:layer_num"`
 	//StartKey string  `gorm:"type:text"`
 	Axis []byte
 }
@@ -61,9 +61,10 @@ type Plane struct {
 func (Plane) TableName() string {
 	return tableName
 }
+
 /**********************************
- Gob编码，Axis做了中间转换
- ***********************************/
+Gob编码，Axis做了中间转换
+***********************************/
 func NewPlaneGobChanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
 	newAxis := buildAxisFromMatrixAxis(axis)
 	var buf bytes.Buffer
@@ -78,7 +79,7 @@ func NewPlaneGobChanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, er
 		buf.Bytes(),
 	}, nil
 }
-func (p Plane)UnmarshalGobChanged() (matrix.Axis, error)  {
+func (p Plane) UnmarshalGobChanged() (matrix.Axis, error) {
 	var buf = bytes.NewBuffer(p.Axis)
 	dec := gob.NewDecoder(buf)
 	var axis Axis
@@ -106,7 +107,7 @@ func NewPlaneGobUnchanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, 
 		buf.Bytes(),
 	}, nil
 }
-func (p Plane) UnmarshalGobUnchanged() (matrix.Axis, error)  {
+func (p Plane) UnmarshalGobUnchanged() (matrix.Axis, error) {
 	var buf = bytes.NewBuffer(p.Axis)
 	dec := gob.NewDecoder(buf)
 	var axis matrix.Axis
@@ -117,7 +118,7 @@ func (p Plane) UnmarshalGobUnchanged() (matrix.Axis, error)  {
 /**********************************
 Json编码，Axis做了中间转换
 ***********************************/
-func NewPlaneJsonChanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
+func NewPlaneJSONChanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
 	newAxis := buildAxisFromMatrixAxis(axis)
 	bytes, err := json.Marshal(newAxis)
 	if err != nil {
@@ -129,7 +130,7 @@ func NewPlaneJsonChanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, e
 		bytes,
 	}, nil
 }
-func (p Plane)UnmarshalJsonChanged() (matrix.Axis, error)  {
+func (p Plane) UnmarshalJSONChanged() (matrix.Axis, error) {
 	var axis Axis
 	err := json.Unmarshal(p.Axis, &axis)
 	var newAxis = buildMatrixAxisFromAxis(axis)
@@ -139,7 +140,7 @@ func (p Plane)UnmarshalJsonChanged() (matrix.Axis, error)  {
 /**********************************
 Json编码，Axis没有做了中间转换
 ***********************************/
-func NewPlaneJsonUnchanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
+func NewPlaneJSONUnchanged(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
 	bytes, err := json.Marshal(axis)
 	if err != nil {
 		return nil, err
@@ -150,13 +151,13 @@ func NewPlaneJsonUnchanged(time time.Time, num uint8, axis matrix.Axis) (*Plane,
 		bytes,
 	}, nil
 }
-func (p Plane)UnmarshalJsonUnchanged() (matrix.Axis, error)  {
+func (p Plane) UnmarshalJSONUnchanged() (matrix.Axis, error) {
 	var axis matrix.Axis
 	err := json.Unmarshal(p.Axis, &axis)
 	return axis, err
 }
 
-const Mode  = 2
+const Mode = 2
 
 /**********************************
 1: Gob编码，Axis做了中间转换
@@ -173,13 +174,13 @@ func NewPlaneMode(time time.Time, num uint8, axis matrix.Axis, mode int) (*Plane
 	case 2:
 		plane, err = NewPlaneGobUnchanged(time, num, axis)
 	case 3:
-		plane, err = NewPlaneJsonChanged(time, num, axis)
+		plane, err = NewPlaneJSONChanged(time, num, axis)
 	case 4:
-		plane, err = NewPlaneJsonUnchanged(time, num, axis)
+		plane, err = NewPlaneJSONUnchanged(time, num, axis)
 	}
 	return plane, err
 }
-func (p Plane)UnmarshalMode(mode int) (matrix.Axis, error)  {
+func (p Plane) UnmarshalMode(mode int) (matrix.Axis, error) {
 	var axis matrix.Axis
 	var err error
 	switch mode {
@@ -188,14 +189,12 @@ func (p Plane)UnmarshalMode(mode int) (matrix.Axis, error)  {
 	case 2:
 		axis, err = p.UnmarshalGobUnchanged()
 	case 3:
-		axis, err = p.UnmarshalJsonChanged()
+		axis, err = p.UnmarshalJSONChanged()
 	case 4:
-		axis, err = p.UnmarshalJsonUnchanged()
+		axis, err = p.UnmarshalJSONUnchanged()
 	}
 	return axis, err
 }
-
-
 
 // Check if the `table` exists
 func checkTable(db *dbstore.DB, table string) bool {

@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/pingcap/log"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
@@ -81,7 +81,7 @@ func (s *layerStat) Reduce() {
 		plane, err := NewPlaneMode(s.StartTime, s.Num, matrix.Axis{}, Mode)
 		log.Debug("New Plane", zap.Error(err))
 		err = s.Db.Where(plane).Delete(&Plane{}).Error
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Time("Time", s.StartTime), zap.Error( err))
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
 		s.RingAxes[s.Head] = matrix.Axis{}
@@ -97,7 +97,7 @@ func (s *layerStat) Reduce() {
 		plane, err := NewPlaneMode(s.StartTime, s.Num, matrix.Axis{}, Mode)
 		log.Debug("New Plane", zap.Error(err))
 		err = s.Db.Where(plane).Delete(&Plane{}).Error
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Time("Time", s.StartTime), zap.Error( err))
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
@@ -122,11 +122,11 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 
 	//isSorted := stringsAreSorted(axis.Keys)
 	//fmt.Println("Append isSorted:", isSorted)
-	plane, err := NewPlaneMode(endTime, s.Num, axis, Mode)
+	plane, _ := NewPlaneMode(endTime, s.Num, axis, Mode)
 	//log.Debug("New Plane", zap.Error(err), zap.Int("key len", len(axis.Keys)),
 	//	zap.Int("type num", len(axis.ValuesList)), zap.Int("statices num", len(axis.ValuesList[0])))
-	err = s.Db.Create(plane).Error
-	log.Debug("Insert Plane", zap.Error( err))
+	err := s.Db.Create(plane).Error
+	log.Debug("Insert Plane", zap.Error(err))
 	//log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Time("Time", endTime), zap.Error( err))
 
 	s.RingAxes[s.Tail] = axis
@@ -205,7 +205,7 @@ type Stat struct {
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(ctx context.Context, wg *sync.WaitGroup, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
+func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
 	for i, c := range cfg.LayersConfig {
 		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, db)
@@ -220,11 +220,16 @@ func NewStat(ctx context.Context, wg *sync.WaitGroup, provider *region.PDDataPro
 		db:       db,
 	}
 
-	wg.Add(1)
-	go func() {
-		s.rebuildRegularly(ctx)
-		wg.Done()
-	}()
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			wg.Add(1)
+			go func() {
+				s.rebuildRegularly(ctx)
+				wg.Done()
+			}()
+			return nil
+		},
+	})
 
 	return s
 }
@@ -237,13 +242,14 @@ func stringsAreSorted(strings []string) bool {
 	if strings[high-1] == "" {
 		high--
 	}
-	for i:=0;i<high-1;i++ {
+	for i := 0; i < high-1; i++ {
 		if strings[i] > strings[i+1] {
 			return false
 		}
 	}
 	return true
 }
+
 // Load data from disk the first time service starts
 func (s *Stat) Load() {
 	log.Debug("Keyviz: load data from dbstore")
@@ -259,7 +265,7 @@ func (s *Stat) Load() {
 			plane, err := NewPlaneMode(layer.StartTime, uint8(i), matrix.Axis{}, Mode)
 			log.Debug("New Plane", zap.Error(err))
 			err = s.db.Create(plane).Error
-			log.Debug("Insert startTime planes", zap.Uint8("Num", uint8(i)), zap.Time("Num", layer.StartTime), zap.Error( err))
+			log.Debug("Insert startTime planes", zap.Uint8("Num", uint8(i)), zap.Time("Num", layer.StartTime), zap.Error(err))
 		}
 	}
 
@@ -268,7 +274,7 @@ func (s *Stat) Load() {
 	if !checkTable(s.db, tableName) {
 		err := s.db.CreateTable(&Plane{}).Error
 		if err != nil {
-			log.Panic("Create table plane", zap.Error( err))
+			log.Panic("Create table plane", zap.Error(err))
 		}
 		createStartPlanes()
 		return
@@ -295,7 +301,7 @@ func (s *Stat) Load() {
 			if num == 0 {
 				// 第一层也只有用于存储开始时间的空plane，说明上次启动没有存储到数据,清空db中的无用数据
 				err = s.db.Delete(&Plane{}).Error
-				log.Debug("Clear table plane", zap.Error( err))
+				log.Debug("Clear table plane", zap.Error(err))
 				break
 			}
 		} else {
@@ -428,7 +434,6 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 //		}
 //	}
 //}
-
 
 func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []matrix.Axis) {
 	s.mutex.RLock()
