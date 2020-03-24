@@ -153,8 +153,8 @@ func (t *Task) SyncRun() {
 	}
 
 	secureOpt := grpc.WithInsecure()
-	if t.taskGroup.service.config.TLSConfig != nil {
-		creds := credentials.NewTLS(t.taskGroup.service.config.TLSConfig)
+	if t.taskGroup.service.config.ClusterTLSConfig != nil {
+		creds := credentials.NewTLS(t.taskGroup.service.config.ClusterTLSConfig)
 		secureOpt = grpc.WithTransportCredentials(creds)
 	}
 
@@ -169,7 +169,7 @@ func (t *Task) SyncRun() {
 	defer conn.Close()
 
 	cli := diagnosticspb.NewDiagnosticsClient(conn)
-	stream, err := cli.SearchLog(t.ctx, (*diagnosticspb.SearchLogRequest)(t.taskGroup.model.SearchRequest))
+	stream, err := cli.SearchLog(t.ctx, t.taskGroup.model.SearchRequest.ConvertToPB())
 	if err != nil {
 		t.setError(err)
 		return

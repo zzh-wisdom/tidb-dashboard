@@ -124,7 +124,7 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 
 	plane, _ := NewPlaneMode(endTime, s.Num, axis, Mode)
 	err := s.Db.Create(plane).Error
-	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error( err))
+	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
 
 	s.RingAxes[s.Tail] = axis
 	s.RingTimes[s.Tail] = endTime
@@ -233,21 +233,21 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 	return s
 }
 
-func stringsAreSorted(strings []string) bool {
-	if len(strings) <= 1 {
-		return true
-	}
-	high := len(strings)
-	if strings[high-1] == "" {
-		high--
-	}
-	for i := 0; i < high-1; i++ {
-		if strings[i] > strings[i+1] {
-			return false
-		}
-	}
-	return true
-}
+//func stringsAreSorted(strings []string) bool {
+//	if len(strings) <= 1 {
+//		return true
+//	}
+//	high := len(strings)
+//	if strings[high-1] == "" {
+//		high--
+//	}
+//	for i := 0; i < high-1; i++ {
+//		if strings[i] > strings[i+1] {
+//			return false
+//		}
+//	}
+//	return true
+//}
 
 // Load data from disk the first time service starts
 func (s *Stat) Load() {
@@ -318,7 +318,7 @@ func (s *Stat) Load() {
 		s.layers[num].EndTime = planes[n].Time
 		s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
 
-		for i, plane := range planes[1:n+1] {
+		for i, plane := range planes[1 : n+1] {
 			s.layers[num].RingTimes[i] = plane.Time
 			axis, err := plane.UnmarshalMode(Mode)
 			if err != nil {

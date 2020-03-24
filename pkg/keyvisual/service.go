@@ -102,8 +102,17 @@ func Register(r *gin.RouterGroup, auth *user.AuthService, s *Service) {
 	endpoint.GET("/heatmaps", s.heatmaps)
 }
 
+func (s *Service) IsRunning() bool {
+	return s.status.IsRunning()
+}
+
 func (s *Service) Start(ctx context.Context) error {
+	if s.IsRunning() {
+		return nil
+	}
+
 	s.ctx, s.cancel = context.WithCancel(ctx)
+
 	s.app = fx.New(
 		fx.Logger(utils.NewFxPrinter()),
 		fx.Provide(
@@ -131,9 +140,20 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) Stop(ctx context.Context) error {
+	if !s.IsRunning() {
+		return nil
+	}
+
+	s.cancel()
 	err := s.app.Stop(ctx)
+
+	// drop
+	s.app = nil
 	s.stat = nil
 	s.strategy = nil
+	s.ctx = nil
+	s.cancel = nil
+
 	return err
 }
 
