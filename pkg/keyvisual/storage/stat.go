@@ -77,7 +77,7 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 // Reduce merges ratio axes and append to next layerStat
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
-		err := s.Db.Where("layer_num = ? AND time = ?", s.Num, s.StartTime).Delete(&Plane{}).Error
+		err := DeletePlane(s.Db, s.Num, s.StartTime)
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
@@ -91,7 +91,7 @@ func (s *layerStat) Reduce() {
 	axes := make([]matrix.Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
-		err := s.Db.Where("layer_num = ? AND time = ?", s.Num, s.StartTime).Delete(&Plane{}).Error
+		err := DeletePlane(s.Db, s.Num, s.StartTime)
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
@@ -115,8 +115,7 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 		s.Reduce()
 	}
 
-	plane, _ := NewPlane(endTime, s.Num, axis)
-	err := s.Db.Create(plane).Error
+	err := InsertPlane(s.Db, s.Num, endTime, axis)
 	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
 
 	s.RingAxes[s.Tail] = axis
@@ -237,37 +236,34 @@ func (s *Stat) Load() {
 	// establish start `Plane` for each layer
 	createStartPlanes := func() {
 		for i, layer := range s.layers {
-			plane, _ := NewPlane(layer.StartTime, uint8(i), matrix.Axis{})
-			err := s.db.Create(plane).Error
+			err := InsertPlane(s.db, uint8(i), layer.StartTime, matrix.Axis{})
 			log.Debug("Insert startTime plane", zap.Uint8("Num", uint8(i)), zap.Time("StartTime", layer.StartTime), zap.Error(err))
 		}
 	}
 
 	// table planes preprocess
-	if !checkTable(s.db, tableName) {
-		err := s.db.CreateTable(&Plane{}).Error
-		if err != nil {
-			log.Panic("Create table plane", zap.Error(err))
-		}
+	isExist, err := CreateTablePlaneIfNotExists(s.db)
+	if err != nil {
+		log.Panic("Create table plane fail", zap.Error(err))
+	}
+	if !isExist {
 		createStartPlanes()
 		return
 	}
 
 	// load data from db
 	num := 0
-	var planes []Plane
 	for ; ; num++ {
-		err := s.db.Where("layer_num = ?", num).Order("Time").Find(&planes).Error
+		planes, err := FindPlaneOrderByTime(s.db, uint8(num))
 		log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1), zap.Error(err))
 		if err != nil || len(planes) == 0 {
 			break
 		}
-
 		if len(planes) > 1 {
 			s.layers[num].Empty = false
 		} else if num == 0 {
 			// no valid data was stored，clear
-			err = s.db.Delete(&Plane{}).Error
+			err := ClearTablePlane(s.db)
 			log.Debug("Clear table plane", zap.Error(err))
 			break
 		}

@@ -12,16 +12,16 @@ import (
 const tableName = "planes"
 
 type Plane struct {
-	Time     time.Time
 	LayerNum uint8 `gorm:"column:layer_num"`
-	Axis []byte
+	Time     time.Time
+	Axis     []byte
 }
 
 func (Plane) TableName() string {
 	return tableName
 }
 
-func NewPlane(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
+func NewPlane(num uint8, time time.Time, axis matrix.Axis) (*Plane, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(axis)
@@ -29,8 +29,8 @@ func NewPlane(time time.Time, num uint8, axis matrix.Axis) (*Plane, error) {
 		return nil, err
 	}
 	return &Plane{
-		time,
 		num,
+		time,
 		buf.Bytes(),
 	}, nil
 }
@@ -43,7 +43,36 @@ func (p Plane) UnmarshalAxis() (matrix.Axis, error) {
 	return axis, err
 }
 
-// Check if the `table` exists
-func checkTable(db *dbstore.DB, table string) bool {
-	return db.HasTable(table)
+// if the table `Plane` exists, return true, nil
+// or create table `Plane`
+func CreateTablePlaneIfNotExists(db *dbstore.DB) (bool, error) {
+	if db.HasTable(&Plane{}) {
+		return true, nil
+	}
+	return false, db.CreateTable(&Plane{}).Error
+}
+
+func ClearTablePlane(db *dbstore.DB) error {
+	return db.Delete(&Plane{}).Error
+}
+
+func InsertPlane(db *dbstore.DB, num uint8, time time.Time, axis matrix.Axis) error {
+	plane, err := NewPlane(num, time, axis)
+	if err != nil {
+		return err
+	}
+	return db.Create(plane).Error
+}
+
+func DeletePlane(db *dbstore.DB, num uint8, time time.Time) error {
+	return db.
+		Where("layer_num = ? AND time = ?", num, time).
+		Delete(&Plane{}).
+		Error
+}
+
+func FindPlaneOrderByTime(db *dbstore.DB, num uint8) ([]Plane, error) {
+	var planes []Plane
+	err := db.Where("layer_num = ?", num).Order("Time").Find(&planes).Error
+	return planes, err
 }
