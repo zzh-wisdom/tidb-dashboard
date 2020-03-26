@@ -195,8 +195,14 @@ func GetTiKVTopology(endpoint string, httpClient *http.Client) ([]TiKVInfo, erro
 		if err != nil {
 			continue
 		}
+		// In current TiKV, it's version may not start with 'v',
+		//  so we may need to add a prefix 'v' for it.
+		version := strings.Trim(v.Version, "\n ")
+		if !strings.HasPrefix(version, "v") {
+			version = "v" + version
+		}
 		node := TiKVInfo{
-			Version:    v.Version,
+			Version:    version,
 			IP:         host,
 			Port:       port,
 			BinaryPath: v.BinaryPath,
@@ -343,6 +349,8 @@ func storeStateToStatus(state string) ComponentStatus {
 		return ComponentStatusUp
 	case "tombstone":
 		return ComponentStatusTombstone
+	case "offline":
+		return ComponentStatusOffline
 	default:
 		return ComponentStatusUnreachable
 	}
@@ -375,4 +383,35 @@ func getPDNodesHealth(pdEndPoint string, httpClient *http.Client) (map[string]st
 		memberHealth[v.MemberID.String()] = struct{}{}
 	}
 	return memberHealth, nil
+}
+
+// GetAlertCountByAddress receives alert manager's address like "ip:port", and it returns the
+//  alert number of the alert manager.
+func GetAlertCountByAddress(address string, httpClient *http.Client) (int, error) {
+	ip, port, err := parseHostAndPortFromAddress(address)
+	if err != nil {
+		return 0, err
+	}
+
+	apiAddress := fmt.Sprintf("http://%s:%d/api/v2/alerts", ip, port)
+	resp, err := httpClient.Get(apiAddress)
+	if err != nil {
+		return 0, err
+	}
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		return 0, err
+	}
+
+	var alerts []struct{}
+
+	err = json.Unmarshal(data, &alerts)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(alerts), nil
 }

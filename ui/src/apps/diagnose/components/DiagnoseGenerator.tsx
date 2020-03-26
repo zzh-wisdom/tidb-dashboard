@@ -1,85 +1,106 @@
-import React, { useState } from 'react'
-import { Button, DatePicker } from 'antd'
-import { RangePickerValue } from 'antd/lib/date-picker/interface'
+import React from 'react'
+import { Button, DatePicker, Form, Select, Switch, message } from 'antd'
 import { useTranslation } from 'react-i18next'
+import { Card } from '@pingcap-incubator/dashboard_components'
+import { useHistory } from 'react-router-dom'
+import client from '@pingcap-incubator/dashboard_client'
 
-const DATE_TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss'
+const useSubmitHandler = (form) => {
+  const history = useHistory()
+  return (e) => {
+    e.preventDefault()
+    form.validateFields(async (err, values) => {
+      if (err) {
+        return
+      }
 
-interface Props {
-  basePath: string
-  createReport: (
-    startTime: string,
-    endTime: string
-  ) => Promise<ReportRes | undefined>
+      const start_time = values.rangeBegin.unix()
+      const end_time = start_time + values.rangeDuration * 60
+      const compare_start_time = values.isCompare
+        ? values.compareRangeBegin.unix()
+        : 0
+      const compare_end_time = values.isCompare
+        ? compare_start_time + values.rangeDuration * 60
+        : 0
+
+      try {
+        const res = await client.getInstance().diagnoseReportsPost({
+          start_time,
+          end_time,
+          compare_start_time,
+          compare_end_time,
+        })
+        history.push(`/diagnose/${res.data}`)
+      } catch (error) {
+        message.error(error.message)
+      }
+    })
+  }
 }
 
-interface ReportRes {
-  report_id: string
-}
-
-function DiagnoseGenerator({ basePath, createReport }: Props) {
-  const [timeRange, setTimeRange] = useState<[string, string]>(['', ''])
-  const [loading, setLoading] = useState(false)
-  const [reportUrl, setReportUrl] = useState('')
+function DiagnoseGenerator(props) {
   const { t } = useTranslation()
 
-  function handleRangeChange(
-    dates: RangePickerValue,
-    _dateStrings: [string, string]
-  ) {
-    // if user clear the range picker, dates is [], dataStrings is ['','']
-    if (dates[0] && dates[1]) {
-      setTimeRange([
-        dates[0].format(DATE_TIME_FORMAT),
-        dates[1].format(DATE_TIME_FORMAT)
-      ])
-    } else {
-      setTimeRange(['', ''])
-    }
-  }
-
-  async function genReport() {
-    setReportUrl('')
-    setLoading(true)
-    const res = await createReport(timeRange[0], timeRange[1])
-    setLoading(false)
-    if (res) {
-      const reportUrl = `${basePath}/diagnose/reports/${res.report_id}`
-      setReportUrl(reportUrl)
-      window.open(reportUrl, '_blank')
-    }
-  }
+  const { getFieldDecorator } = props.form
+  const isComapre = props.form.getFieldValue('isCompare')
+  const handleSubmit = useSubmitHandler(props.form)
 
   return (
-    <div>
-      <DatePicker.RangePicker
-        style={{ marginRight: 12 }}
-        showTime
-        format={DATE_TIME_FORMAT}
-        placeholder={[
-          t('diagnose.time_selector.start_time'),
-          t('diagnose.time_selector.end_time')
-        ]}
-        onChange={handleRangeChange}
-      />
-      <Button
-        disabled={timeRange[0] === ''}
-        onClick={genReport}
-        loading={loading}
-      >
-        {loading ? t('diagnose.keep_wait') : t('diagnose.gen_report')}
-      </Button>
-      {reportUrl && (
-        <p style={{ marginTop: 12 }}>
-          {t('diagnose.open_link')}:
-          <br />
-          <a href={reportUrl} target="_blank">
-            {reportUrl}
-          </a>
-        </p>
-      )}
-    </div>
+    <Card title={t('diagnose.generate.title')}>
+      <Form onSubmit={handleSubmit}>
+        <Form.Item label={t('diagnose.generate.range_begin')}>
+          {getFieldDecorator('rangeBegin', {
+            rules: [
+              {
+                required: true,
+              },
+            ],
+          })(<DatePicker showTime />)}
+        </Form.Item>
+        <Form.Item label={t('diagnose.generate.range_duration')}>
+          {getFieldDecorator('rangeDuration', {
+            initialValue: 10,
+            rules: [
+              {
+                required: true,
+              },
+            ],
+          })(
+            <Select style={{ width: 120 }}>
+              <Select.Option value={5}>5 min</Select.Option>
+              <Select.Option value={10}>10 min</Select.Option>
+              <Select.Option value={30}>30 min</Select.Option>
+              <Select.Option value={60}>1 hour</Select.Option>
+              <Select.Option value={24 * 60}>1 day</Select.Option>
+            </Select>
+          )}
+        </Form.Item>
+        <Form.Item label={t('diagnose.generate.is_compare')}>
+          {getFieldDecorator('isCompare', { valuePropName: 'checked' })(
+            <Switch />
+          )}
+        </Form.Item>
+        {isComapre && (
+          <Form.Item label={t('diagnose.generate.compare_range_begin')}>
+            {getFieldDecorator('compareRangeBegin', {
+              rules: [
+                {
+                  required: isComapre,
+                },
+              ],
+            })(<DatePicker showTime />)}
+          </Form.Item>
+        )}
+        <Form.Item>
+          <Button type="primary" htmlType="submit">
+            {t('diagnose.generate.submit')}
+          </Button>
+        </Form.Item>
+      </Form>
+    </Card>
   )
 }
 
-export default DiagnoseGenerator
+const GenerateForm = Form.create()(DiagnoseGenerator)
+
+export default GenerateForm

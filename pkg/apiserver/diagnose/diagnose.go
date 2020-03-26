@@ -14,14 +14,15 @@
 package diagnose
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"html/template"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/render"
-	"github.com/jinzhu/gorm"
+	"go.uber.org/fx"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/user"
 	apiutils "github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/utils"
@@ -31,6 +32,10 @@ import (
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/utils"
 )
 
+const (
+	timeLayout = "2006-01-02 15:04:05"
+)
+
 type Service struct {
 	config        *config.Config
 	db            *dbstore.DB
@@ -38,17 +43,16 @@ type Service struct {
 	htmlRender    render.HTMLRender
 }
 
-type ReportRes struct {
-	ReportID uint `json:"report_id"`
-}
+func NewService(lc fx.Lifecycle, config *config.Config, tidbForwarder *tidb.Forwarder, db *dbstore.DB, newTemplate utils.NewTemplateFunc) *Service {
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			Migrate(db)
+			return nil
+		},
+	})
 
-type Report struct {
-	gorm.Model
-	Content string
-}
+	t := newTemplate("diagnose")
 
-func NewService(config *config.Config, tidbForwarder *tidb.Forwarder, db *dbstore.DB, t *template.Template) *Service {
-	db.AutoMigrate(&Report{})
 	return &Service{
 		config:        config,
 		db:            db,
@@ -57,47 +61,104 @@ func NewService(config *config.Config, tidbForwarder *tidb.Forwarder, db *dbstor
 	}
 }
 
-func (s *Service) Register(r *gin.RouterGroup, auth *user.AuthService) {
+func Register(r *gin.RouterGroup, auth *user.AuthService, s *Service) {
 	endpoint := r.Group("/diagnose")
 	endpoint.POST("/reports",
 		auth.MWAuthRequired(),
 		apiutils.MWConnectTiDB(s.tidbForwarder),
 		s.genReportHandler)
 	endpoint.GET("/reports/:id", s.reportHandler)
+	endpoint.GET("/reports/:id/status",
+		auth.MWAuthRequired(),
+		apiutils.MWConnectTiDB(s.tidbForwarder),
+		s.reportStatusHandler)
+}
+
+type GenerateReportRequest struct {
+	StartTime        int64 `json:"start_time"`
+	EndTime          int64 `json:"end_time"`
+	CompareStartTime int64 `json:"compare_start_time"`
+	CompareEndTime   int64 `json:"compare_end_time"`
 }
 
 // @Summary SQL diagnosis report
 // @Description Generate sql diagnosis report
-// @Produce html
-// @Param start_time query string true "start time of the report"
-// @Param end_time query string true "end time of the report"
-// @Success 200 {object} diagnose.ReportRes
+// @Produce json
+// @Param request body GenerateReportRequest true "Request body"
+// @Success 200 {object} int
 // @Router /diagnose/reports [post]
 // @Security JwtAuth
 // @Failure 401 {object} utils.APIError "Unauthorized failure"
 func (s *Service) genReportHandler(c *gin.Context) {
-	db := c.MustGet(apiutils.TiDBConnectionKey).(*gorm.DB)
-	startTime := c.Query("start_time")
-	endTime := c.Query("end_time")
-	if startTime == "" || endTime == "" {
-		_ = c.Error(fmt.Errorf("invalid begin_time or end_time"))
+	var req GenerateReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Status(http.StatusBadRequest)
+		_ = c.Error(apiutils.ErrInvalidRequest.WrapWithNoMessage(err))
 		return
 	}
 
-	tables := GetReportTablesForDisplay(startTime, endTime, db)
-	content, err := json.Marshal(tables)
+	startTime := time.Unix(req.StartTime, 0)
+	endTime := time.Unix(req.EndTime, 0)
+	var compareStartTime, compareEndTime *time.Time
+	if req.CompareStartTime != 0 && req.CompareEndTime != 0 {
+		compareStartTime = new(time.Time)
+		compareEndTime = new(time.Time)
+		*compareStartTime = time.Unix(req.CompareStartTime, 0)
+		*compareEndTime = time.Unix(req.CompareEndTime, 0)
+	}
+
+	reportID, err := NewReport(s.db, startTime, endTime, compareStartTime, compareEndTime)
 	if err != nil {
 		_ = c.Error(err)
 		return
 	}
 
-	report := Report{Content: string(content)}
-	if err := s.db.Create(&report).Error; err != nil {
+	db := apiutils.TakeTiDBConnection(c)
+
+	go func() {
+		defer db.Close()
+
+		var tables []*TableDef
+		if compareStartTime == nil || compareEndTime == nil {
+			tables = GetReportTablesForDisplay(startTime.Format(timeLayout), endTime.Format(timeLayout), db, s.db, reportID)
+		} else {
+			tables = GetCompareReportTablesForDisplay(
+				startTime.Format(timeLayout), endTime.Format(timeLayout),
+				compareStartTime.Format(timeLayout), compareEndTime.Format(timeLayout),
+				db, s.db, reportID)
+		}
+		_ = UpdateReportProgress(s.db, reportID, 100)
+		content, err := json.Marshal(tables)
+		if err == nil {
+			_ = SaveReportContent(s.db, reportID, string(content))
+		}
+	}()
+
+	c.JSON(http.StatusOK, reportID)
+}
+
+// @Summary Diagnosis report status
+// @Description Get diagnosis report status
+// @Produce json
+// @Param id path string true "report id"
+// @Success 200 {object} diagnose.Report
+// @Router /diagnose/reports/{id}/status [get]
+// @Security JwtAuth
+// @Failure 401 {object} utils.APIError "Unauthorized failure"
+func (s *Service) reportStatusHandler(c *gin.Context) {
+	id := c.Param("id")
+	reportID, err := strconv.Atoi(id)
+	if err != nil {
 		_ = c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, ReportRes{ReportID: report.ID})
+	report, err := GetReport(s.db, uint(reportID))
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, &report)
 }
 
 // @Summary SQL diagnosis report
@@ -107,14 +168,26 @@ func (s *Service) genReportHandler(c *gin.Context) {
 // @Success 200 {string} string
 // @Router /diagnose/reports/{id} [get]
 func (s *Service) reportHandler(c *gin.Context) {
-	reportID := c.Param("id")
-	var report Report
-	if err := s.db.First(&report, reportID).Error; err != nil {
+	id := c.Param("id")
+	reportID, err := strconv.Atoi(id)
+	if err != nil {
 		_ = c.Error(err)
 		return
 	}
+
+	report, err := GetReport(s.db, uint(reportID))
+	if err != nil {
+		_ = c.Error(err)
+		return
+	}
+
+	if len(report.Content) == 0 {
+		c.String(http.StatusOK, "The report is in generating, please referesh it later")
+		return
+	}
+
 	var tables []*TableDef
-	err := json.Unmarshal([]byte(report.Content), &tables)
+	err = json.Unmarshal([]byte(report.Content), &tables)
 	if err != nil {
 		_ = c.Error(err)
 		return

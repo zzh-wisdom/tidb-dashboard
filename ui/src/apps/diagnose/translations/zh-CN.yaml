@@ -1,8 +1,18 @@
 diagnose:
   nav_title: 集群诊断
-  time_selector:
-    start_time: 起始时间
-    end_time: 结束时间
-  gen_report: 生成诊断报告
-  keep_wait: 需要一些时间，请耐心等待
-  open_link: 如果浏览器阻拦了打开新 tab，请手动点击此链接
+  generate:
+    title: 生成诊断报告
+    range_begin: 诊断区间起始时间
+    range_duration: 区间大小
+    is_compare: 与其他区间对比
+    compare_range_begin: 基线区间起始时间
+    submit: 生成报告
+  status:
+    head:
+      title: 诊断状态
+      back: 生成诊断报告
+      view: 查看完整诊断报告
+    range_begin: 区间起始时间
+    range_end: 区间结束时间
+    baseline_begin: 基线区间起始时间
+    progress: 生成进度

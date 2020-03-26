@@ -16,6 +16,7 @@ package diagnose
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -72,18 +73,11 @@ func (t AvgMaxMinTableDef) queryRow(arg *queryArg, db *gorm.DB) (*TableRowDef, e
 		return t.genRow(rows[0], nil), nil
 	}
 
-	sql = fmt.Sprintf("select '',`%[2]v`, avg(value), max(value), min(value) from metrics_schema.%[3]v %[4]s group by `%[2]v` order by avg(value) desc",
+	sql = fmt.Sprintf("select '%[1]s',`%[2]v`, avg(value), max(value), min(value) from metrics_schema.%[3]v %[4]s group by `%[2]v` order by avg(value) desc",
 		t.name, t.label, t.tbl, condition)
 	subRows, err := querySQL(db, sql)
 	if err != nil {
 		return nil, err
-	}
-	for i := range subRows {
-		row := subRows[i]
-		row[1] = strings.Join(row[1:2], ",")
-		newRow := row[:2]
-		newRow = append(newRow, row[2:]...)
-		subRows[i] = newRow
 	}
 	return t.genRow(rows[0], subRows), nil
 }
@@ -513,7 +507,11 @@ func convertFloatToSize(s string) string {
 	if err != nil {
 		return s
 	}
-	if mb := f / float64(1024*1024); mb > 0 {
+	if mb := f / float64(1024*1024*1024); mb > 1 {
+		f = math.Round(mb*1000) / 1000
+		return fmt.Sprintf("%.3f GB", f)
+	}
+	if mb := f / float64(1024*1024); mb > 1 {
 		f = math.Round(mb*1000) / 1000
 		return fmt.Sprintf("%.3f MB", f)
 	}
@@ -522,15 +520,61 @@ func convertFloatToSize(s string) string {
 	return fmt.Sprintf("%.3f KB", f)
 }
 
+func convertFloatToDuration(s string, ratio float64) string {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return s
+	}
+	f = f * ratio
+	if f > 1 {
+		f = math.Round(f*1000) / 1000
+		return fmt.Sprintf("%.3f s", f)
+	}
+	if ms := f * 1000; ms > 1 {
+		f = math.Round(ms*1000) / 1000
+		return fmt.Sprintf("%.3f ms", f)
+	}
+	us := f * 1000 * 1000
+	f = math.Round(us*1000) / 1000
+	return fmt.Sprintf("%.3f us", f)
+}
+
+func convertFloatToSizeByRows(rows []TableRowDef, idx int) {
+	for i := range rows {
+		convertFloatToSizeByRow(&rows[i], idx)
+	}
+}
+
+func convertFloatToSizeByRow(row *TableRowDef, idx int) {
+	if len(row.Values) < (idx + 1) {
+		return
+	}
+	row.Values[idx] = convertFloatToSize(row.Values[idx])
+	for j := range row.SubValues {
+		if len(row.SubValues[j]) < (idx + 1) {
+			continue
+		}
+		row.SubValues[j][idx] = convertFloatToSize(row.SubValues[j][idx])
+	}
+}
+
 func RoundFloatString(s string) string {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return s
 	}
+	return convertFloatToString(f)
+}
+
+func convertFloatToString(f float64) string {
 	if f == 0 {
 		return "0"
 	}
-
+	sign := float64(1)
+	if f < 0 {
+		sign = -1
+		f = 0 - f
+	}
 	tmp := f
 	n := 2
 	for {
@@ -548,7 +592,7 @@ func RoundFloatString(s string) string {
 	f = math.Round(f*value) / value
 
 	format := `%.` + strconv.FormatInt(int64(n), 10) + `f`
-	str := fmt.Sprintf(format, f)
+	str := fmt.Sprintf(format, f*sign)
 	if strings.Contains(str, ".") {
 		for strings.HasSuffix(str, "0") {
 			str = str[:len(str)-1]
@@ -568,4 +612,32 @@ func genComment(comment string, labels []string) string {
 		comment = fmt.Sprintf("%s the label is [%s]", comment, strings.Join(labels, ", "))
 	}
 	return comment
+}
+
+func sortRowsByIndex(resultRows []TableRowDef, idx int) {
+	// sort sub rows.
+	for j := range resultRows {
+		sort.Slice(resultRows[j].SubValues, func(i, j int) bool {
+			if len(resultRows[j].SubValues[i]) < (idx+1) || len(resultRows[j].SubValues[j]) < (idx+1) {
+				return false
+			}
+			v1, err1 := parseFloat(resultRows[j].SubValues[i][idx])
+			v2, err2 := parseFloat(resultRows[j].SubValues[j][idx])
+			if err1 != nil || err2 != nil {
+				return false
+			}
+			return v1 > v2
+		})
+	}
+	sort.Slice(resultRows, func(i, j int) bool {
+		if len(resultRows[i].Values) < (idx+1) || len(resultRows[j].Values) < (idx+1) {
+			return false
+		}
+		v1, err1 := parseFloat(resultRows[i].Values[idx])
+		v2, err2 := parseFloat(resultRows[j].Values[idx])
+		if err1 != nil || err2 != nil {
+			return false
+		}
+		return v1 > v2
+	})
 }

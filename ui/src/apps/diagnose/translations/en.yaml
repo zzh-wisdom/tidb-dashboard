@@ -1,8 +1,18 @@
 diagnose:
   nav_title: Cluster Diagnose
-  time_selector:
-    start_time: Start Time
-    end_time: End Time
-  gen_report: Generate Diagnose Report
-  keep_wait: It takes some time, keep patient
-  open_link: In case the browser blocks opening the new tab, please open the link manually
+  generate:
+    title: New Diagnose Report
+    range_begin: Diagnose Begin Range
+    range_duration: Range Size
+    is_compare: Compare by Baseline
+    compare_range_begin: Baseline Begin Range
+    submit: Generate
+  status:
+    head:
+      title: Diagnose Status
+      back: New Diagnose Report
+      view: View Full Report
+    range_begin: Range Start Time
+    range_end: Range End Time
+    baseline_begin: Baseline Range Start Time
+    progress: Progress

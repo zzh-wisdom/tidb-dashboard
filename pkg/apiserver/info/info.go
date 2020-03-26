@@ -17,7 +17,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/user"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/apiserver/utils"
@@ -37,7 +36,7 @@ func NewService(config *config.Config, tidbForwarder *tidb.Forwarder, db *dbstor
 	return &Service{config: config, db: db, tidbForwarder: tidbForwarder}
 }
 
-func (s *Service) Register(r *gin.RouterGroup, auth *user.AuthService) {
+func Register(r *gin.RouterGroup, auth *user.AuthService, s *Service) {
 	endpoint := r.Group("/info")
 	endpoint.Use(auth.MWAuthRequired())
 	endpoint.GET("/info", s.infoHandler)
@@ -93,7 +92,7 @@ type DatabaseResponse = []string
 // @Security JwtAuth
 // @Failure 401 {object} utils.APIError "Unauthorized failure"
 func (s *Service) databasesHandler(c *gin.Context) {
-	db := c.MustGet(utils.TiDBConnectionKey).(*gorm.DB)
+	db := utils.GetTiDBConnection(c)
 	var result DatabaseResponse
 	err := db.Raw("show databases").Pluck("Databases", &result).Error
 	if err != nil {

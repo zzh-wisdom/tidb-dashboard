@@ -1,26 +1,17 @@
 import React from 'react'
 import { HashRouter as Router, Switch, Route } from 'react-router-dom'
-import { DiagnoseGenerator } from './components'
-import client from '@/utils/client'
-
-function createReport(startTime, endTime) {
-  return client.dashboard
-    .diagnoseReportsPost(startTime, endTime)
-    .then(res => res.data)
-}
+import { DiagnoseGenerator, DiagnoseStatus } from './components'
 
 const App = () => (
   <Router>
-    <div style={{ margin: 12 }}>
-      <Switch>
-        <Route path="/diagnose">
-          <DiagnoseGenerator
-            basePath={client.basePath}
-            createReport={createReport}
-          />
-        </Route>
-      </Switch>
-    </div>
+    <Switch>
+      <Route path="/diagnose/:id">
+        <DiagnoseStatus />
+      </Route>
+      <Route path="/diagnose">
+        <DiagnoseGenerator />
+      </Route>
+    </Switch>
   </Router>
 )
 
