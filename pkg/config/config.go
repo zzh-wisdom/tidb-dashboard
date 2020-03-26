@@ -20,6 +20,10 @@ import (
 type Config struct {
 	DataDir    string
 	PDEndPoint string
-	// 安全传输层协议（TLS）用于在两个通信应用程序之间提供保密性和数据完整性。
-	TLSConfig  *tls.Config
+
+	// TLS config for mTLS authentication between TiDB components.
+	ClusterTLSConfig *tls.Config
+
+	// TLS config for mTLS authentication between TiDB and MySQL client.
+	TiDBTLSConfig *tls.Config
 }

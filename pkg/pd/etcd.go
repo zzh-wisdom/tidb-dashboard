@@ -14,41 +14,75 @@
 package pd
 
 import (
+	"context"
 	"time"
 
+	"github.com/pingcap/log"
 	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
 )
 
 const (
-	EtcdTimeout               = time.Second * 3
 	TiDBServerInformationPath = "/tidb/server/info"
 )
 
-var _ EtcdProvider = (*LocalEtcdProvider)(nil)
-
-type EtcdProvider interface {
-	GetEtcdClient() *clientv3.Client
-}
-
-// FIXME: We should be able to provide etcd directly. However currently there are problems in PD.
-type LocalEtcdProvider struct {
-	client *clientv3.Client
-}
-
-func NewLocalEtcdClientProvider(config *config.Config) (*LocalEtcdProvider, error) {
-	client, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{config.PDEndPoint},
-		DialTimeout: EtcdTimeout,
-		TLS:         config.TLSConfig,
-	})
-	if err != nil {
-		return nil, err
+func newZapEncoder(zapcore.EncoderConfig) (zapcore.Encoder, error) {
+	logCfg := log.Config{
+		DisableTimestamp:    false,
+		DisableErrorVerbose: false,
 	}
-	return &LocalEtcdProvider{client: client}, nil
+	return log.NewTextEncoder(&logCfg), nil
 }
 
-func (p *LocalEtcdProvider) GetEtcdClient() *clientv3.Client {
-	return p.client
+func init() {
+	_ = zap.RegisterEncoder("etcd-client", newZapEncoder)
+}
+
+func NewEtcdClient(lc fx.Lifecycle, config *config.Config) (*clientv3.Client, error) {
+	// TODO: refactor
+	// Because etcd client does not support setting logger directly,
+	// the configuration of pingcap/log is copied here.
+	zapCfg := zap.NewProductionConfig()
+	zapCfg.Encoding = "etcd-client"
+	zapCfg.OutputPaths = []string{"stderr"}
+	zapCfg.ErrorOutputPaths = []string{"stderr"}
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:        []string{config.PDEndPoint},
+		AutoSyncInterval: 30 * time.Second,
+		DialTimeout:      5 * time.Second,
+		DialOptions: []grpc.DialOption{
+			grpc.WithConnectParams(grpc.ConnectParams{
+				Backoff: backoff.Config{
+					BaseDelay:  1.0 * time.Second,
+					Multiplier: 1.6,
+					Jitter:     0.2,
+					MaxDelay:   3 * time.Second,
+				},
+				MinConnectTimeout: 20 * time.Second,
+			}),
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Time:                10 * time.Second,
+				Timeout:             3 * time.Second,
+				PermitWithoutStream: true,
+			}),
+		},
+		TLS:       config.ClusterTLSConfig,
+		LogConfig: &zapCfg,
+	})
+
+	lc.Append(fx.Hook{
+		OnStop: func(context.Context) error {
+			return cli.Close()
+		},
+	})
+
+	return cli, err
 }
