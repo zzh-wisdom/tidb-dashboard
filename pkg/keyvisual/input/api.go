@@ -102,6 +102,7 @@ func read(stream io.ReadCloser) (*RegionsInfo, error) {
 			if err != nil {
 				break
 			}
+			// region是指针，所以可以修改到原来的数据
 			region.StartKey = regionpkg.String(startBytes)
 			region.EndKey = regionpkg.String(endBytes)
 		}
@@ -115,6 +116,7 @@ func read(stream io.ReadCloser) (*RegionsInfo, error) {
 	return regions, err
 }
 
+// 通过API像服务器获取数据
 func NewAPIPeriodicGetter(pdAddr string, client *http.Client) regionpkg.RegionsInfoGenerator {
 	addr := fmt.Sprintf("%s/pd/api/v1/regions", pdAddr)
 	return func() (regionsInfo regionpkg.RegionsInfo, err error) {
