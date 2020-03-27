@@ -203,6 +203,7 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 }
 
 func (s *Stat) rebuildKeyMap() {
+	// 这里注意防止死锁，需要都按照这个顺序上锁
 	s.keyMap.Lock()
 	defer s.keyMap.Unlock()
 	s.mutex.Lock()
@@ -258,6 +259,7 @@ func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []matrix.Ax
 func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, baseTag region.StatTag) matrix.Plane {
 	s.keyMap.RLock()
 	defer s.keyMap.RUnlock()
+	// 为了后续的相等判断做准备，有些可能range出来的是空的axis，不保存keyMap，后续比较会出问题
 	s.keyMap.SaveKey(&startKey)
 	s.keyMap.SaveKey(&endKey)
 

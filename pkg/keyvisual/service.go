@@ -177,6 +177,7 @@ func (s *Service) heatmaps(c *gin.Context) {
 	typ := c.Query("type")
 
 	endTime := time.Now()
+	// 默认6小时
 	startTime := endTime.Add(-360 * time.Minute)
 	if startTimeString != "" {
 		tsSec, err := strconv.ParseInt(startTimeString, 10, 64)

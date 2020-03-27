@@ -108,7 +108,7 @@ func (s *distanceStrategy) GenerateHelper(chunks []chunk, compactKeys []string) 
 
 func (s *distanceStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper interface{}) {
 	CheckPartOf(dst.Keys, src.Keys)
-
+	// 相等的情况下就是没有任何划分，用不到helper
 	if len(dst.Keys) == len(src.Keys) {
 		switch tag {
 		case splitTo:
@@ -231,6 +231,7 @@ func (s *distanceStrategy) GenerateScaleColumnWork(ch chan *scaleTask) {
 		// When it is not enough to accommodate maxDis, expand the capacity.
 		for tempMapCap <= maxDis {
 			tempMapCap *= 2
+			// TODO: 这个代码可以优化
 			tempMap = make([]float64, tempMapCap)
 		}
 
@@ -264,10 +265,12 @@ func (s *distanceStrategy) GenerateScaleColumnWork(ch chan *scaleTask) {
 					d := tempDis[i]
 					if d != tempDis[i-1] {
 						level++
+						// 等级太多（也就是距离太远）或者分的段数太多，就不分，总体上，减少向距离太远的分段分配数据
 						if level >= s.SplitLevel || i >= s.SplitCount {
 							tempMap[d] = 0
 						} else {
 							// tempValue = math.Pow(s.SplitRatio, float64(level))
+							// 感觉这个有点问题，level=1和level=0的tempValue都是1.0
 							tempValue = s.SplitRatioPow[level]
 							tempMap[d] = tempValue
 						}
@@ -276,6 +279,7 @@ func (s *distanceStrategy) GenerateScaleColumnWork(ch chan *scaleTask) {
 				}
 				// Calculate scale
 				for ; start < end; start++ {
+					// 计算比率
 					scale[start] = tempMap[dis[start]] / tempSum
 				}
 			}
