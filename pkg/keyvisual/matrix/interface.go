@@ -15,6 +15,8 @@ package matrix
 
 import (
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
+	"go.uber.org/fx"
+	"sync"
 )
 
 type splitTag int
@@ -35,4 +37,33 @@ type splitStrategy interface {
 type Strategy interface {
 	splitStrategy
 	decorator.LabelStrategy
+}
+
+type StrategyMode int
+
+const (
+	DistanceStrategyMode StrategyMode = 0
+	AverageStrategyMode StrategyMode = 1
+)
+
+func (sm StrategyMode) String() string {
+	switch sm {
+	case AverageStrategyMode:
+		return "AverageStrategy"
+	case DistanceStrategyMode:
+		return "DistanceStrategyMode"
+	default:
+		panic("unreachable")
+	}
+}
+
+func NewStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, config *StrategyConfig, label decorator.LabelStrategy) Strategy {
+	switch config.Mode {
+	case AverageStrategyMode:
+		return AverageStrategy(label)
+	case DistanceStrategyMode:
+		return DistanceStrategy(lc, wg, label, config.DistanceStrategyRatio, config.DistanceStrategyLevel, config.distanceStrategyCount)
+	default:
+		panic("unreachable")
+	}
 }
