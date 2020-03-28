@@ -254,11 +254,12 @@ func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, labelS
 	return matrix.NewStrategy(lc, wg, config, labelStrategy)
 }
 
-func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy) *storage.Stat {
-	stat := storage.NewStat(lc, wg, provider, defaultStatConfig, strategy, in.GetStartTime())
+func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
+	stat := storage.NewStat(lc, wg, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			stat.Load()
 			wg.Add(1)
 			go func() {
 				in.Background(ctx, stat)

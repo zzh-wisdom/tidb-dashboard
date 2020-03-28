@@ -20,8 +20,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/log"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
 )
@@ -40,26 +43,31 @@ type layerStat struct {
 	RingAxes  []matrix.Axis
 	RingTimes []time.Time
 
+	Num   uint8
 	Head  int
 	Tail  int
 	Empty bool
 	Len   int
+
+	Db *dbstore.DB
 	// Hierarchical mechanism
 	Strategy matrix.Strategy
 	Ratio    int
 	Next     *layerStat
 }
 
-func newLayerStat(conf LayerConfig, strategy matrix.Strategy, startTime time.Time) *layerStat {
+func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *layerStat {
 	return &layerStat{
 		StartTime: startTime,
 		EndTime:   startTime,
 		RingAxes:  make([]matrix.Axis, conf.Len),
 		RingTimes: make([]time.Time, conf.Len),
+		Num:       num,
 		Head:      0,
 		Tail:      0,
 		Empty:     true,
 		Len:       conf.Len,
+		Db:        db,
 		Strategy:  strategy,
 		Ratio:     conf.Ratio,
 		Next:      nil,
@@ -69,6 +77,9 @@ func newLayerStat(conf LayerConfig, strategy matrix.Strategy, startTime time.Tim
 // Reduce merges ratio axes and append to next layerStat
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
+		err := DeletePlane(s.Db, s.Num, s.StartTime)
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+
 		s.StartTime = s.RingTimes[s.Head]
 		s.RingAxes[s.Head] = matrix.Axis{}
 		s.Head = (s.Head + 1) % s.Len
@@ -80,6 +91,9 @@ func (s *layerStat) Reduce() {
 	axes := make([]matrix.Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
+		err := DeletePlane(s.Db, s.Num, s.StartTime)
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
 		axes = append(axes, s.RingAxes[s.Head])
@@ -100,6 +114,10 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 	if s.Head == s.Tail && !s.Empty {
 		s.Reduce()
 	}
+
+	err := InsertPlane(s.Db, s.Num, endTime, axis)
+	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
+
 	s.RingAxes[s.Tail] = axis
 	s.RingTimes[s.Tail] = endTime
 	s.Empty = false
@@ -171,13 +189,15 @@ type Stat struct {
 	strategy matrix.Strategy
 
 	provider *region.PDDataProvider
+
+	db *dbstore.DB
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time) *Stat {
+func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
 	for i, c := range cfg.LayersConfig {
-		layers[i] = newLayerStat(c, strategy, startTime)
+		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, db)
 		if i > 0 {
 			layers[i-1].Next = layers[i]
 		}
@@ -186,6 +206,7 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 		layers:   layers,
 		strategy: strategy,
 		provider: provider,
+		db:       db,
 	}
 
 	lc.Append(fx.Hook{
@@ -198,8 +219,76 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 			return nil
 		},
 	})
-
+	//s.Load()
 	return s
+}
+
+// Load data from disk the first time service starts
+func (s *Stat) Load() {
+	log.Debug("keyviz: load data from dbstore")
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.keyMap.RLock()
+	defer s.keyMap.RUnlock()
+
+	// establish start `Plane` for each layer
+	createStartPlanes := func() {
+		for i, layer := range s.layers {
+			err := InsertPlane(s.db, uint8(i), layer.StartTime, matrix.Axis{})
+			log.Debug("Insert startTime plane", zap.Uint8("Num", uint8(i)), zap.Time("StartTime", layer.StartTime), zap.Error(err))
+		}
+	}
+
+	// table planes preprocess
+	isExist, err := CreateTablePlaneIfNotExists(s.db)
+	if err != nil {
+		log.Panic("Create table plane fail", zap.Error(err))
+	}
+	if !isExist {
+		createStartPlanes()
+		return
+	}
+
+	// load data from db
+	num := 0
+	for ; ; num++ {
+		planes, err := FindPlaneOrderByTime(s.db, uint8(num))
+		log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1), zap.Error(err))
+		if err != nil || len(planes) == 0 {
+			break
+		}
+		if len(planes) > 1 {
+			s.layers[num].Empty = false
+		} else if num == 0 {
+			// no valid data was stored，clear
+			err := ClearTablePlane(s.db)
+			log.Debug("Clear table plane", zap.Error(err))
+			break
+		}
+
+		// the first plane is only used to save starttime,
+		s.layers[num].StartTime = planes[0].Time
+		s.layers[num].Head = 0
+		n := len(planes) - 1
+		if n > s.layers[num].Len {
+			log.Panic("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
+		}
+		s.layers[num].EndTime = planes[n].Time
+		s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
+		for i, plane := range planes[1 : n+1] {
+			s.layers[num].RingTimes[i] = plane.Time
+			axis, err := plane.UnmarshalAxis()
+			if err != nil {
+				panic("Unexpected plane unmarshal error!")
+			}
+			s.keyMap.SaveKeys(axis.Keys)
+			s.layers[num].RingAxes[i] = axis
+		}
+	}
+	if num == 0 {
+		createStartPlanes()
+	}
 }
 
 func (s *Stat) rebuildKeyMap() {
