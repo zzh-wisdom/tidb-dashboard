@@ -9,7 +9,7 @@ type StrategyConfig struct {
 }
 
 func NewStrategyConfig(mode StrategyMode, distanceStrategyRatio float64, distanceStrategyLevel, distanceStrategyCount int) *StrategyConfig {
-	return &StrategyConfig {
+	return &StrategyConfig{
 		mode,
 		distanceStrategyRatio,
 		distanceStrategyLevel,

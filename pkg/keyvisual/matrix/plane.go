@@ -46,7 +46,7 @@ func CreateEmptyPlane(startTime, endTime time.Time, startKey, endKey string, val
 func (plane *Plane) Compact(strategy Strategy) Axis {
 	chunks := make([]chunk, len(plane.Axes))
 	for i, axis := range plane.Axes {
-		chunks[i] = createChunk(axis.Keys, axis.ValuesList[0])
+		chunks[i] = createChunk(axis.Keys, axis.ValuesList[0],strategy.GetChunkStrategy())
 	}
 	compactChunk, helper := compact(strategy, chunks)
 	valuesListLen := len(plane.Axes[0].ValuesList)
@@ -72,7 +72,7 @@ func (plane *Plane) Pixel(strategy Strategy, target int, displayTags []string) M
 	axesLen := len(plane.Axes)
 	chunks := make([]chunk, axesLen)
 	for i, axis := range plane.Axes {
-		chunks[i] = createChunk(axis.Keys, axis.ValuesList[0])
+		chunks[i] = createChunk(axis.Keys, axis.ValuesList[0], strategy.GetChunkStrategy())
 	}
 	compactChunk, helper := compact(strategy, chunks)
 	baseKeys := compactChunk.Divide(strategy, target).Keys
@@ -82,10 +82,10 @@ func (plane *Plane) Pixel(strategy Strategy, target int, displayTags []string) M
 	var mutex sync.Mutex
 	generateFunc := func(j int) {
 		data := make([][]uint64, axesLen)
-		goCompactChunk := createZeroChunk(compactChunk.Keys)
+		goCompactChunk := createZeroChunk(compactChunk.Keys, strategy.GetChunkStrategy())
 		for i, axis := range plane.Axes {
 			goCompactChunk.Clear()
-			strategy.Split(goCompactChunk, createChunk(chunks[i].Keys, axis.ValuesList[j]), splitTo, i, helper)
+			strategy.Split(goCompactChunk, createChunk(chunks[i].Keys, axis.ValuesList[j], strategy.GetChunkStrategy()), splitTo, i, helper)
 			data[i] = goCompactChunk.Reduce(baseKeys).Values
 		}
 		mutex.Lock()
@@ -126,7 +126,7 @@ func compact(strategy Strategy, chunks []chunk) (compactChunk chunk, helper inte
 	} else {
 		compactKeys = MakeKeys(keySet)
 	}
-	compactChunk = createZeroChunk(compactKeys)
+	compactChunk = createZeroChunk(compactKeys, strategy.GetChunkStrategy())
 
 	helper = strategy.GenerateHelper(chunks, compactChunk.Keys)
 	for i, c := range chunks {

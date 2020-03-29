@@ -21,8 +21,9 @@ LDFLAGS += -X "$(DASHBOARD_PKG)/pkg/utils.BuildTS=$(shell date -u '+%Y-%m-%d %I:
 LDFLAGS += -X "$(DASHBOARD_PKG)/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
 LDFLAGS += -X "$(DASHBOARD_PKG)/pkg/utils.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
 
+
 default:
-	SWAGGER=1 make server
+    SWAGGER=1 make server
 
 lint:
 	scripts/lint.sh
@@ -34,7 +35,7 @@ swagger_spec:
 	scripts/generate_swagger_spec.sh
 
 yarn_dependencies:
-	cd ui &&\
+	cd ui
 	yarn install --frozen-lockfile
 
 ui: swagger_spec yarn_dependencies
@@ -55,5 +56,41 @@ ifeq ($(UI),1)
 endif
 	go build -o bin/tidb-dashboard -ldflags '$(LDFLAGS)' -tags "${BUILD_TAGS}" cmd/tidb-dashboard/main.go
 
+all_server:
+	UI=1 SWAGGER=1 make server
+
 run:
 	bin/tidb-dashboard --debug
+
+run_p_d:
+	bin/tidb-dashboard --debug
+
+run_p_a:
+	bin/tidb-dashboard --debug --matrix-strategy-mode 1
+
+run_p_mb:
+	bin/tidb-dashboard --debug --matrix-strategy-mode 2
+
+run_p_mg:
+	bin/tidb-dashboard --debug --matrix-strategy-mode 3
+
+
+run_f_d:
+	cd bin &&\
+	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800
+
+run_f_a:
+	cd bin &&\
+	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --matrix-strategy-mode 1
+
+run_f_mb:
+	cd bin &&\
+	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --matrix-strategy-mode 2
+
+run_f_mg:
+	cd bin &&\
+	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --matrix-strategy-mode 3
+
+all:
+	make ui &&\
+	make all_server

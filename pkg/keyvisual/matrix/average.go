@@ -26,16 +26,16 @@ type averageStrategy struct {
 
 // AverageStrategy adopts the strategy of equal distribution when buckets are split.
 func AverageStrategy(label decorator.LabelStrategy) Strategy {
-	return averageStrategy{
+	return &averageStrategy{
 		LabelStrategy: label,
 	}
 }
 
-func (averageStrategy) GenerateHelper(chunks []chunk, compactKeys []string) interface{} {
+func (*averageStrategy) GenerateHelper(chunks []chunk, compactKeys []string) interface{} {
 	return averageHelper{}
 }
 
-func (averageStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper interface{}) {
+func (*averageStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper interface{}) {
 	CheckPartOf(dst.Keys, src.Keys)
 
 	if len(dst.Keys) == len(src.Keys) {
@@ -84,4 +84,8 @@ func (averageStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper
 	default:
 		panic("unreachable")
 	}
+}
+
+func (*averageStrategy) GetChunkStrategy() ChunkStrategy {
+	return SumThresholdStrategy
 }

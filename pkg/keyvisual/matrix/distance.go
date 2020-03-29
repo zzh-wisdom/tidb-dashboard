@@ -158,6 +158,10 @@ func (s *distanceStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, he
 	}
 }
 
+func (*distanceStrategy) GetChunkStrategy() ChunkStrategy {
+	return SumThresholdStrategy
+}
+
 // multi-threaded calculate scale matrix.
 var workerCount = runtime.NumCPU()
 

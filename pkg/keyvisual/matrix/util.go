@@ -144,3 +144,18 @@ func Min(a, b int) int {
 	}
 	return b
 }
+
+// MaxUint64 returns the larger of a and b.
+func MaxUint64(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func AbsDifference(a, b uint64) uint64 {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}

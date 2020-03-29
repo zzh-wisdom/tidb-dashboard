@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	heatmapsMaxDisplayY = 1536
+	heatmapsMaxDisplayY = 200//1536
 
 	distanceStrategyRatio = 1.0 / math.Phi
 	distanceStrategyLevel = 15
@@ -254,12 +254,16 @@ func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, labelS
 	return matrix.NewStrategy(lc, wg, config, labelStrategy)
 }
 
-func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
+func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
+	statInputMode := input.StatInputMode(cfg.StatInputMode)
+	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
+	if statInputMode == input.FileInputMode {
+		db = nil
+	}
 	stat := storage.NewStat(lc, wg, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			stat.Load()
 			wg.Add(1)
 			go func() {
 				in.Background(ctx, stat)

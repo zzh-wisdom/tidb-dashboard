@@ -130,9 +130,13 @@ func NewCLIConfig() *DashboardCLIConfig {
 	endTime := cfg.KVFileEndTime
 	if startTime != 0 || endTime != 0 {
 		// file mode (debug)
+		cfg.CoreConfig.StatInputMode = int(keyvisualinput.FileInputMode)
 		if startTime == 0 || endTime == 0 || startTime >= endTime {
 			panic("keyviz-file-start must be smaller than keyviz-file-end, and none of them are 0")
 		}
+	} else {
+		// periodic mode (default)
+		cfg.CoreConfig.StatInputMode = int(keyvisualinput.PeriodicInputMode)
 	}
 
 	return cfg

@@ -49,6 +49,7 @@ type layerStat struct {
 	Empty bool
 	Len   int
 
+	//EnableDBStore bool
 	Db *dbstore.DB
 	// Hierarchical mechanism
 	Strategy matrix.Strategy
@@ -77,8 +78,10 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 // Reduce merges ratio axes and append to next layerStat
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
-		err := DeletePlane(s.Db, s.Num, s.StartTime)
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		if s.Db != nil {
+			err := DeletePlane(s.Db, s.Num, s.StartTime)
+			log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		}
 
 		s.StartTime = s.RingTimes[s.Head]
 		s.RingAxes[s.Head] = matrix.Axis{}
@@ -91,8 +94,10 @@ func (s *layerStat) Reduce() {
 	axes := make([]matrix.Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
-		err := DeletePlane(s.Db, s.Num, s.StartTime)
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		if s.Db != nil {
+			err := DeletePlane(s.Db, s.Num, s.StartTime)
+			log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		}
 
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
@@ -115,8 +120,10 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 		s.Reduce()
 	}
 
-	err := InsertPlane(s.Db, s.Num, endTime, axis)
-	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
+	if s.Db != nil {
+		err := InsertPlane(s.Db, s.Num, endTime, axis)
+		log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
+	}
 
 	s.RingAxes[s.Tail] = axis
 	s.RingTimes[s.Tail] = endTime
@@ -194,7 +201,8 @@ type Stat struct {
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
+func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider,
+	cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
 	for i, c := range cfg.LayersConfig {
 		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, db)
@@ -211,6 +219,7 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			s.Load()
 			wg.Add(1)
 			go func() {
 				s.rebuildRegularly(ctx)
@@ -219,12 +228,14 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 			return nil
 		},
 	})
-	//s.Load()
 	return s
 }
 
 // Load data from disk the first time service starts
 func (s *Stat) Load() {
+	if s.db == nil {
+		return
+	}
 	log.Debug("keyviz: load data from dbstore")
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

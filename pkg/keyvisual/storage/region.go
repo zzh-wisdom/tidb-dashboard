@@ -53,7 +53,7 @@ func CreateStorageAxis(regions region.RegionsInfo, strategy matrix.Strategy) mat
 // IntoStorageAxis converts ResponseAxis to StorageAxis.
 func IntoStorageAxis(responseAxis matrix.Axis, strategy matrix.Strategy) matrix.Axis {
 	// axis := preAxis.Focus(strategy, preThreshold, len(keys)/preRatioTarget, preTarget)
-	axis := responseAxis.Divide(strategy, preTarget)
+	axis := responseAxis.Divide(strategy, preTarget, matrix.SumThresholdStrategy)
 	var storageValuesList [][]uint64
 	storageValuesList = append(storageValuesList, axis.ValuesList[1:]...)
 	return matrix.CreateAxis(axis.Keys, storageValuesList)

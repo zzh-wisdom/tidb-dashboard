@@ -14,9 +14,11 @@
 package matrix
 
 import (
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
-	"go.uber.org/fx"
 	"sync"
+
+	"go.uber.org/fx"
+
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
 )
 
 type splitTag int
@@ -37,13 +39,16 @@ type splitStrategy interface {
 type Strategy interface {
 	splitStrategy
 	decorator.LabelStrategy
+	GetChunkStrategy() ChunkStrategy
 }
 
 type StrategyMode int
 
 const (
 	DistanceStrategyMode StrategyMode = 0
-	AverageStrategyMode StrategyMode = 1
+	AverageStrategyMode  StrategyMode = 1
+	MaxBorderStrategyMode StrategyMode = 2
+	MaxGradientStrategyMode StrategyMode = 3
 )
 
 func (sm StrategyMode) String() string {
@@ -52,6 +57,10 @@ func (sm StrategyMode) String() string {
 		return "AverageStrategy"
 	case DistanceStrategyMode:
 		return "DistanceStrategyMode"
+	case MaxBorderStrategyMode:
+		return "MaxBorderStrategyMode"
+	case MaxGradientStrategyMode:
+		return "MaxGradientStrategyMode"
 	default:
 		panic("unreachable")
 	}
@@ -63,6 +72,10 @@ func NewStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, config *StrategyConfig, la
 		return AverageStrategy(label)
 	case DistanceStrategyMode:
 		return DistanceStrategy(lc, wg, label, config.DistanceStrategyRatio, config.DistanceStrategyLevel, config.distanceStrategyCount)
+	case MaxBorderStrategyMode:
+		return MaximumStrategy(label, MaxBorderStrategy)
+	case MaxGradientStrategyMode:
+		return MaximumStrategy(label, MaxGradientStrategy)
 	default:
 		panic("unreachable")
 	}
