@@ -9,7 +9,7 @@ import (
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 )
 
-const tableName = "planes"
+const tablePlaneName = "planes"
 
 type Plane struct {
 	LayerNum uint8 `gorm:"column:layer_num"`
@@ -18,7 +18,7 @@ type Plane struct {
 }
 
 func (Plane) TableName() string {
-	return tableName
+	return tablePlaneName
 }
 
 func NewPlane(num uint8, time time.Time, axis matrix.Axis) (*Plane, error) {
@@ -53,7 +53,7 @@ func CreateTablePlaneIfNotExists(db *dbstore.DB) (bool, error) {
 }
 
 func ClearTablePlane(db *dbstore.DB) error {
-	return db.Delete(&Plane{}).Error
+	return db.Table(tablePlaneName).Delete(&Plane{}).Error
 }
 
 func InsertPlane(db *dbstore.DB, num uint8, time time.Time, axis matrix.Axis) error {
@@ -61,11 +61,12 @@ func InsertPlane(db *dbstore.DB, num uint8, time time.Time, axis matrix.Axis) er
 	if err != nil {
 		return err
 	}
-	return db.Create(plane).Error
+	return db.Table(tablePlaneName).Create(plane).Error
 }
 
 func DeletePlane(db *dbstore.DB, num uint8, time time.Time) error {
 	return db.
+		Table(tablePlaneName).
 		Where("layer_num = ? AND time = ?", num, time).
 		Delete(&Plane{}).
 		Error
@@ -73,6 +74,11 @@ func DeletePlane(db *dbstore.DB, num uint8, time time.Time) error {
 
 func FindPlaneOrderByTime(db *dbstore.DB, num uint8) ([]Plane, error) {
 	var planes []Plane
-	err := db.Where("layer_num = ?", num).Order("Time").Find(&planes).Error
+	err := db.
+		Table(tablePlaneName).
+		Where("layer_num = ?", num).
+		Order("Time").
+		Find(&planes).
+		Error
 	return planes, err
 }

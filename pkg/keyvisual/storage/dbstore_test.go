@@ -55,7 +55,7 @@ func (t *testDbstoreSuite) TestClearTablePlane(c *C) {
 		c.Fatalf("InsertPlane error: %v", err)
 	}
 	var count int
-	err = t.db.Table(tableName).Count(&count).Error
+	err = t.db.Table(tablePlaneName).Count(&count).Error
 	if err != nil {
 		c.Fatalf("Count table Plane error: %v", err)
 	}
@@ -64,7 +64,7 @@ func (t *testDbstoreSuite) TestClearTablePlane(c *C) {
 	err = ClearTablePlane(t.db)
 	c.Assert(err, IsNil)
 
-	err = t.db.Table(tableName).Count(&count).Error
+	err = t.db.Table(tablePlaneName).Count(&count).Error
 	if err != nil {
 		c.Fatalf("Count table Plane error: %v", err)
 	}
@@ -112,7 +112,7 @@ func (t *testDbstoreSuite) TestDeletePlane(c *C) {
 	}
 
 	var count int
-	err = t.db.Table(tableName).Count(&count).Error
+	err = t.db.Table(tablePlaneName).Count(&count).Error
 	if err != nil {
 		c.Fatalf("Count table Plane error: %v", err)
 	}
@@ -121,7 +121,7 @@ func (t *testDbstoreSuite) TestDeletePlane(c *C) {
 	err = DeletePlane(t.db, num, time)
 	c.Assert(err, IsNil)
 
-	err = t.db.Table(tableName).Count(&count).Error
+	err = t.db.Table(tablePlaneName).Count(&count).Error
 	if err != nil {
 		c.Fatalf("Count table Plane error: %v", err)
 	}

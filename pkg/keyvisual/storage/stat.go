@@ -190,7 +190,8 @@ type Stat struct {
 
 	provider *region.PDDataProvider
 
-	db *dbstore.DB
+	db           *dbstore.DB
+	reportManage *ReportManage
 }
 
 // NewStat generates a Stat based on the configuration.
@@ -203,14 +204,16 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 		}
 	}
 	s := &Stat{
-		layers:   layers,
-		strategy: strategy,
-		provider: provider,
-		db:       db,
+		layers:       layers,
+		strategy:     strategy,
+		provider:     provider,
+		db:           db,
+		reportManage: NewReportManage(db, startTime.Add(reportInterval)),
 	}
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			s.Restore()
 			wg.Add(1)
 			go func() {
 				s.rebuildRegularly(ctx)
@@ -223,14 +226,11 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 	return s
 }
 
-// Load data from disk the first time service starts
-func (s *Stat) Load() {
-	log.Debug("keyviz: load data from dbstore")
+// Restore data from disk the first time service starts
+func (s *Stat) Restore() {
+	log.Debug("keyviz: restore data from dbstore")
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	s.keyMap.RLock()
-	defer s.keyMap.RUnlock()
 
 	// establish start `Plane` for each layer
 	createStartPlanes := func() {
@@ -247,48 +247,75 @@ func (s *Stat) Load() {
 	}
 	if !isExist {
 		createStartPlanes()
-		return
-	}
-
-	// load data from db
-	num := 0
-	for ; ; num++ {
-		planes, err := FindPlaneOrderByTime(s.db, uint8(num))
-		log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1), zap.Error(err))
-		if err != nil || len(planes) == 0 {
-			break
-		}
-		if len(planes) > 1 {
-			s.layers[num].Empty = false
-		} else if num == 0 {
-			// no valid data was stored，clear
-			err := ClearTablePlane(s.db)
-			log.Debug("Clear table plane", zap.Error(err))
-			break
-		}
-
-		// the first plane is only used to save starttime,
-		s.layers[num].StartTime = planes[0].Time
-		s.layers[num].Head = 0
-		n := len(planes) - 1
-		if n > s.layers[num].Len {
-			log.Panic("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
-		}
-		s.layers[num].EndTime = planes[n].Time
-		s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
-		for i, plane := range planes[1 : n+1] {
-			s.layers[num].RingTimes[i] = plane.Time
-			axis, err := plane.UnmarshalAxis()
-			if err != nil {
-				panic("Unexpected plane unmarshal error!")
+	} else {
+		// load data from db
+		num := 0
+		for ; ; num++ {
+			planes, err := FindPlaneOrderByTime(s.db, uint8(num))
+			log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1), zap.Error(err))
+			if err != nil || len(planes) == 0 {
+				break
 			}
-			s.keyMap.SaveKeys(axis.Keys)
-			s.layers[num].RingAxes[i] = axis
+			if len(planes) > 1 {
+				s.layers[num].Empty = false
+			} else if num == 0 {
+				// no valid data was stored，clear
+				err := ClearTablePlane(s.db)
+				log.Debug("Clear table plane", zap.Error(err))
+				break
+			}
+
+			// the first plane is only used to save starttime,
+			s.layers[num].StartTime = planes[0].Time
+			s.layers[num].Head = 0
+			n := len(planes) - 1
+			if n > s.layers[num].Len {
+				log.Panic("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
+			}
+			s.layers[num].EndTime = planes[n].Time
+			s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
+			for i, plane := range planes[1 : n+1] {
+				s.layers[num].RingTimes[i] = plane.Time
+				axis, err := plane.UnmarshalAxis()
+				if err != nil {
+					panic("Unexpected plane unmarshal error!")
+				}
+				s.keyMap.SaveKeys(axis.Keys)
+				s.layers[num].RingAxes[i] = axis
+			}
+		}
+		if num == 0 {
+			createStartPlanes()
 		}
 	}
-	if num == 0 {
-		createStartPlanes()
+
+	s.keyMap.RUnlock()
+	s.mutex.Unlock()
+
+	// restore Report data
+	nowTime := s.reportManage.ReportTime.Add(-reportInterval)
+	err = s.reportManage.RestoreReport()
+	if err != nil {
+		log.Panic("restore report error", zap.Error(err))
 	}
+	log.Debug("all reports", zap.Times("EndTime", s.reportManage.ReportEndTimes))
+	if s.reportManage.IsNeedReport(nowTime) {
+		newMatrix := s.generateMatrix()
+		err := s.reportManage.InsertReport(newMatrix)
+		if err != nil {
+			log.Warn("InsertReport error", zap.Error(err))
+		}
+		s.reportManage.ReportTime = nowTime.Add(reportInterval)
+	}
+	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
+}
+
+func (s *Stat)GetReport(endTime time.Time) (report matrix.Matrix, isFind bool) {
+	report, isFind, err := s.reportManage.FindReport(endTime)
+	if err != nil {
+		log.Warn("GetReport error", zap.Error(err))
+	}
+	return
 }
 
 func (s *Stat) rebuildKeyMap() {
@@ -329,12 +356,33 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	axis := CreateStorageAxis(regions, s.strategy)
 
 	s.keyMap.RLock()
-	defer s.keyMap.RUnlock()
+	//defer s.keyMap.RUnlock()
 	s.keyMap.SaveKeys(axis.Keys)
+	s.keyMap.RUnlock()
 
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	//defer s.mutex.Unlock()
 	s.layers[0].Append(axis, endTime)
+	s.mutex.Unlock()
+
+	if !s.reportManage.IsNeedReport(endTime) {
+		return
+	}
+	newMatrix := s.generateMatrix()
+	err := s.reportManage.InsertReport(newMatrix)
+	if err != nil {
+		log.Warn("InsertReport error", zap.Error(err))
+	}
+	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
+}
+
+func (s *Stat) generateMatrix() matrix.Matrix {
+	reportStartTime := s.reportManage.ReportTime.Add(-reportTimeRange)
+	reportEndTime := s.reportManage.ReportTime
+	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime))
+	plane := s.Range(reportStartTime, reportEndTime, "", "", region.Integration)
+	newMatrix := plane.Pixel(s.strategy, reportMaxDisplayY, region.GetDisplayTags(region.Integration))
+	return newMatrix
 }
 
 func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []matrix.Axis) {

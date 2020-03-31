@@ -14,14 +14,8 @@
 package storage
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 )
-
-func TestRegion(t *testing.T) {
-	TestingT(t)
-}
 
 var _ = Suite(&testRegionSuite{})
 

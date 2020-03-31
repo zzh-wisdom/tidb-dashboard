@@ -257,7 +257,6 @@ func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			stat.Load()
 			wg.Add(1)
 			go func() {
 				in.Background(ctx, stat)
