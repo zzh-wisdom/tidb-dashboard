@@ -315,6 +315,7 @@ func (s *Stat)GetReport(endTime time.Time) (report matrix.Matrix, isFind bool) {
 	if err != nil {
 		log.Warn("GetReport error", zap.Error(err))
 	}
+	log.Debug("GetReport", zap.Time("EndTime", endTime), zap.Bool("isFind", isFind))
 	return
 }
 

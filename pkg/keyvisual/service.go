@@ -222,6 +222,19 @@ func (s *Service) heatmaps(c *gin.Context) {
 		return
 	}
 	baseTag := region.IntoTag(typ)
+
+	// report test
+	if endKey != "" || startKey != "" {
+		resp, isFind := s.stat.GetReport(endTime)
+		if isFind {
+			resp.DataMap = map[string][][]uint64{
+				typ: resp.DataMap[typ],
+			}
+			c.JSON(http.StatusOK, resp)
+			return
+		}
+	}
+
 	plane := s.stat.Range(startTime, endTime, startKey, endKey, baseTag)
 	resp := plane.Pixel(s.strategy, heatmapsMaxDisplayY, region.GetDisplayTags(baseTag))
 	resp.Range(startKey, endKey)
