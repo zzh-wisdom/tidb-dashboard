@@ -1,5 +1,14 @@
 import React, { Component } from 'react'
-import { Slider, Spin, Icon, Select, Dropdown, Button } from 'antd'
+import {
+  AreaChartOutlined,
+  ArrowsAltOutlined,
+  BulbOutlined,
+  ClockCircleOutlined,
+  DownOutlined,
+  LoadingOutlined,
+  SyncOutlined,
+} from '@ant-design/icons'
+import { Slider, Spin, Select, Dropdown, Button } from 'antd'
 import { withTranslation, WithTranslation } from 'react-i18next'
 import Flexbox from '@g07cha/flexbox-react'
 import { Card } from '@pingcap-incubator/dashboard_components'
@@ -28,11 +37,11 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
     this.props.onToggleAutoFetch()
   }
 
-  handleDateRange = value => {
+  handleDateRange = (value) => {
     this.props.onChangeDateRange(value)
   }
 
-  handleMetricChange = value => {
+  handleMetricChange = (value) => {
     this.props.onChangeMetric(value)
   }
 
@@ -91,19 +100,18 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
             overlay={
               <div id="PD-KeyVis-Brightness-Overlay">
                 <div
-                  onClick={e => {
+                  onClick={(e) => {
                     e.stopPropagation()
                   }}
                 >
-                  <Flexbox flexDirection="column" alignItems="center">
+                  <Flexbox flexDirection="column">
                     <div className="PD-Cluster-Legend" />
                     <Slider
-                      style={{ width: 360 }}
                       defaultValue={0}
                       min={-6}
                       max={6}
                       step={0.1}
-                      onChange={value =>
+                      onChange={(value) =>
                         this.handleBrightLevel(value as number)
                       }
                     />
@@ -114,9 +122,9 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
             trigger={['click']}
             onVisibleChange={this.handleBrightnessDropdown}
           >
-            <Button icon="bulb">
+            <Button icon={<BulbOutlined />}>
               {t('keyvis.toolbar.brightness')}
-              <Icon type="down" />
+              <DownOutlined />
             </Button>
           </Dropdown>
 
@@ -125,7 +133,7 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
           <Button.Group>
             <Button
               onClick={this.props.onToggleBrush}
-              icon="arrows-alt"
+              icon={<ArrowsAltOutlined />}
               type={isOnBrush ? 'primary' : 'default'}
             >
               {t('keyvis.toolbar.zoom.select')}
@@ -139,7 +147,7 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
 
           <Button
             onClick={this.handleAutoFetch}
-            icon="sync"
+            icon={<SyncOutlined />}
             type={isAutoFetch ? 'primary' : 'default'}
           >
             {t('keyvis.toolbar.auto_refresh')}
@@ -152,13 +160,13 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
             value={dateRange}
             style={{ width: 150 }}
           >
-            {DateRangeOptions.map(option => (
+            {DateRangeOptions.map((option) => (
               <Select.Option
                 key={option.text}
                 value={option.value}
                 className="PD-KeyVis-Select-Option"
               >
-                <Icon type="clock-circle" /> {option.text}
+                <ClockCircleOutlined /> {option.text}
               </Select.Option>
             ))}
           </Select>
@@ -170,13 +178,13 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
             value={metricType}
             style={{ width: 160 }}
           >
-            {MetricOptions.map(option => (
+            {MetricOptions.map((option) => (
               <Select.Option
                 key={option.text}
                 value={option.value}
                 className="PD-KeyVis-Select-Option"
               >
-                <Icon type="area-chart" /> {option.text}
+                <AreaChartOutlined /> {option.text}
               </Select.Option>
             ))}
           </Select>
@@ -185,7 +193,7 @@ class KeyVisToolBar extends Component<IKeyVisToolBarProps & WithTranslation> {
 
           {this.props.isLoading && (
             <Spin
-              indicator={<Icon type="loading" style={{ fontSize: 24 }} spin />}
+              indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />}
             />
           )}
         </div>

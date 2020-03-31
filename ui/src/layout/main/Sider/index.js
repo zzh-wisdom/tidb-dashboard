@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Layout, Menu, Icon } from 'antd'
+import { ExperimentOutlined } from '@ant-design/icons'
+import { Layout, Menu } from 'antd'
 import { Link } from 'react-router-dom'
 import { useEventListener } from '@umijs/hooks'
 import { useTranslation } from 'react-i18next'
@@ -27,15 +28,15 @@ function TrailMenu({ items, delay, ...props }) {
 
 function useAnimatedAppMenuItem(registry, appId, title) {
   const { t } = useTranslation()
-  return animationProps => {
+  return (animationProps) => {
     const app = registry.apps[appId]
     if (!app) {
       return null
     }
     return (
       <AnimatedMenuItem key={appId} {...animationProps}>
-        <Link to={app.indexRoute}>
-          {app.icon ? <Icon type={app.icon} /> : null}
+        <Link to={app.indexRoute} id={appId}>
+          {app.icon ? <app.icon /> : null}
           <span>{title ? title : t(`${appId}.nav_title`, appId)}</span>
         </Link>
       </AnimatedMenuItem>
@@ -84,18 +85,18 @@ export default function Sider({
     useAnimatedAppMenuItem(registry, 'search_logs'),
     useAnimatedAppMenuItem(registry, 'instance_profiling'),
   ]
-  const debugSubMenu = animationProps => (
+  const debugSubMenu = (animationProps) => (
     <AnimatedSubMenu
       key="debug"
       title={
         <span>
-          <Icon type="experiment" />
+          <ExperimentOutlined />
           <span>{t('nav.sider.debug')}</span>
         </span>
       }
       {...animationProps}
     >
-      {debugSubMenuItems.map(r => r())}
+      {debugSubMenuItems.map((r) => r())}
     </AnimatedSubMenu>
   )
 
