@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	reportInterval   = time.Minute
-	reportTimeRange  = time.Minute
+	reportInterval   = time.Minute*10
+	reportTimeRange  = time.Minute*10
 
 	reportMaxDisplayY = 1536
 )
