@@ -22,8 +22,10 @@ type Config struct {
 	PDEndPoint string
 
 	// TLS config for mTLS authentication between TiDB components.
+	// TiDB组件之间的mTLS身份验证的TLS配置。,main函数中生成
 	ClusterTLSConfig *tls.Config
 
 	// TLS config for mTLS authentication between TiDB and MySQL client.
+	// TiDB和MySQL客户端之间的mTLS身份验证的TLS配置。
 	TiDBTLSConfig *tls.Config
 }

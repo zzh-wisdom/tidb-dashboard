@@ -107,6 +107,8 @@ func NewCLIConfig() *DashboardCLIConfig {
 	if !strings.HasPrefix(cfg.CoreConfig.PDEndPoint, "http") {
 		cfg.CoreConfig.PDEndPoint = fmt.Sprintf("http://%s", cfg.CoreConfig.PDEndPoint)
 	}
+
+	// 判断PD的地址是否正确
 	pdEndPoint, err := url.Parse(cfg.CoreConfig.PDEndPoint)
 	if err != nil {
 		log.Fatal("Invalid PD Endpoint", zap.Error(err))
@@ -171,6 +173,7 @@ func main() {
 	cliConfig := NewCLIConfig()
 	ctx := getContext()
 
+	// 设置log显示的等级，大于等于这个等级的log均会在终端显示
 	if cliConfig.EnableDebugLog {
 		log.SetLevel(zapcore.DebugLevel)
 	}
@@ -199,6 +202,7 @@ func main() {
 	defer s.Stop(context.Background()) //nolint:errcheck
 
 	mux := http.DefaultServeMux
+	// 前端的handle，跟go build的-tags有关，条件编译
 	mux.Handle("/dashboard/", http.StripPrefix("/dashboard", uiserver.Handler()))
 	mux.Handle("/dashboard/api/", apiserver.Handler(s))
 	mux.Handle("/dashboard/api/swagger/", swaggerserver.Handler())

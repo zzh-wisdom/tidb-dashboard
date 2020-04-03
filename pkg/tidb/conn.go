@@ -34,6 +34,7 @@ const (
 	envTidbOverrideEndpointKey = "TIDB_OVERRIDE_ENDPOINT"
 )
 
+// 取其中一个tidb节点的IP和Port
 func (f *Forwarder) getDBConnProps() (host string, port int, err error) {
 	info, err := f.getServerInfo()
 	if err == nil {
@@ -46,6 +47,7 @@ func (f *Forwarder) getDBConnProps() (host string, port int, err error) {
 func (f *Forwarder) OpenTiDB(user string, pass string) (*gorm.DB, error) {
 	var addr string
 	addr = os.Getenv(envTidbOverrideEndpointKey)
+	// 环境变量未设置EndPoint则通过网络获取
 	if len(addr) < 1 {
 		host, port, err := f.getDBConnProps()
 		if err != nil {

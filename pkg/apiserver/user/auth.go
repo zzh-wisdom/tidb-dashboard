@@ -39,6 +39,7 @@ var (
 	ErrSignInOther               = ErrNSSignIn.NewType("other")
 )
 
+// 验证服务
 type AuthService struct {
 	middleware *jwt.GinJWTMiddleware
 }
@@ -51,6 +52,7 @@ type authenticateForm struct {
 
 type TokenResponse struct {
 	Token  string    `json:"token"`
+	// 到期时间
 	Expire time.Time `json:"expire"`
 }
 

@@ -46,9 +46,10 @@ func init() {
 }
 
 func NewEtcdClient(lc fx.Lifecycle, config *config.Config) (*clientv3.Client, error) {
-	// TODO: refactor
+	// TODO: refactor 重构
 	// Because etcd client does not support setting logger directly,
 	// the configuration of pingcap/log is copied here.
+	// 由于etcd客户端不直接支持设置记录器，因此将pingcap / log的配置复制到此处。
 	zapCfg := zap.NewProductionConfig()
 	zapCfg.Encoding = "etcd-client"
 	zapCfg.OutputPaths = []string{"stderr"}

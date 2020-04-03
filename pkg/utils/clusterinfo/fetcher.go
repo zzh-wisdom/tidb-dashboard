@@ -108,6 +108,7 @@ func fillDBMap(address, fieldType string, value []byte, infoMap map[string]*TiDB
 	}
 }
 
+// 主要是改变info.Status
 func genDBList(infoMap map[string]*TiDBInfo, ttlMap map[string][]byte) []TiDBInfo {
 	nodes := make([]TiDBInfo, 0)
 
