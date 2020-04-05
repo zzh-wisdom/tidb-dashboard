@@ -52,12 +52,11 @@ func CreateStorageAxisFromRegions(regions region.RegionsInfo, strategy matrix.St
 }
 
 // ConciseStorageAxis divide storageAxis remove storageAxis.ValuesList[0] whose tag is Integration
-func ConciseStorageAxis(storageAxis Axis, strategy matrix.Strategy) Axis {
-	richStorageAxis := RichStorageAxis(storageAxis)
-	axis := richStorageAxis.Divide(strategy, preTarget)
+func ConciseStorageAxis(axis Axis, strategy matrix.Strategy) Axis {
+	newAxis := axis.Divide(strategy, preTarget)
 	var ValuesList [][]uint64
-	ValuesList = append(ValuesList, axis.ValuesList[1:]...)
-	return CreateStorageAxis(axis.Keys, ValuesList)
+	ValuesList = append(ValuesList, newAxis.ValuesList[1:]...)
+	return CreateStorageAxis(newAxis.Keys, ValuesList)
 }
 
 // RichStorageAxis add integration values at storageAxis.ValuesList[0]

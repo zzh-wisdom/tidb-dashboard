@@ -75,16 +75,20 @@ func (s *layerStat) Reduce() {
 		return
 	}
 
+	times := make([]time.Time, 0, s.Ratio+1)
+	times = append(times, s.StartTime)
 	axes := make([]Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
 		s.StartTime = s.RingTimes[s.Head]
+		times = append(times, s.StartTime)
 		axes = append(axes, s.RingAxes[s.Head])
 		s.RingAxes[s.Head] = Axis{}
 		s.Head = (s.Head + 1) % s.Len
 	}
 
-	compactAxis := Compact(axes, s.Strategy)
+	compactAxis := Compact(times, axes, s.Strategy)
+	compactAxis = RichStorageAxis(compactAxis)
 	newStorageAxis := ConciseStorageAxis(compactAxis, s.Strategy)
 	newStorageAxis.Shrink(uint64(s.Ratio))
 	s.Next.Append(newStorageAxis, s.StartTime)

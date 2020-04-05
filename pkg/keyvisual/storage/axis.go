@@ -15,6 +15,7 @@ package storage
 
 import (
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
+	"time"
 )
 
 // Axis stores consecutive buckets. Each bucket has StartKey, EndKey, and some statistics. The EndKey of each bucket is
@@ -117,7 +118,7 @@ func (axis *Axis) Divide(strategy matrix.Strategy, target int) Axis {
 	return CreateStorageAxis(newAxis.Keys, newValuesList)
 }
 
-func Compact(StorageAxes []Axis, strategy matrix.Strategy) Axis {
+func Compact(times []time.Time, StorageAxes []Axis, strategy matrix.Strategy) Axis {
 	if len(StorageAxes) == 0 {
 		return Axis{}
 	}
@@ -125,7 +126,7 @@ func Compact(StorageAxes []Axis, strategy matrix.Strategy) Axis {
 	for i, axis := range StorageAxes {
 		axes[i] = matrix.CreateAxis(axis.Keys, axis.ValuesList[0])
 	}
-	plane := matrix.CreatePlane(nil, axes)
+	plane := matrix.CreatePlane(times, axes)
 	compactAxis, helper := plane.Compact(strategy)
 	valuesListLen := len(StorageAxes[0].ValuesList)
 	valuesList := make([][]uint64, valuesListLen)
