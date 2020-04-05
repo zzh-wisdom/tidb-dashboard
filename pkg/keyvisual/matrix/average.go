@@ -31,18 +31,18 @@ func AverageStrategy(label decorator.LabelStrategy) Strategy {
 	}
 }
 
-func (averageStrategy) GenerateHelper(chunks []chunk, compactKeys []string) interface{} {
+func (averageStrategy) GenerateHelper(chunks []Axis, compactKeys []string) interface{} {
 	return averageHelper{}
 }
 
-func (averageStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper interface{}) {
+func (averageStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper interface{}) {
 	CheckPartOf(dst.Keys, src.Keys)
 
 	if len(dst.Keys) == len(src.Keys) {
 		switch tag {
-		case splitTo:
+		case SplitTo:
 			copy(dst.Values, src.Values)
-		case splitAdd:
+		case SplitAdd:
 			for i, v := range src.Values {
 				dst.Values[i] += v
 			}
@@ -59,7 +59,7 @@ func (averageStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper
 	end := start + 1
 
 	switch tag {
-	case splitTo:
+	case SplitTo:
 		for i, key := range src.Keys[1:] {
 			for !equal(dst.Keys[end], key) {
 				end++
@@ -70,7 +70,7 @@ func (averageStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper
 			}
 			end++
 		}
-	case splitAdd:
+	case SplitAdd:
 		for i, key := range src.Keys[1:] {
 			for !equal(dst.Keys[end], key) {
 				end++

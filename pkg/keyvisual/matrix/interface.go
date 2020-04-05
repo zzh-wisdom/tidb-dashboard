@@ -17,18 +17,18 @@ import (
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
 )
 
-type splitTag int
+type SplitTag int
 
 const (
-	splitTo  splitTag = iota // Direct assignment after split
-	splitAdd                 // Add to original value after split
+	SplitTo  SplitTag = iota // Direct assignment after split
+	SplitAdd                 // Add to original value after split
 )
 
 // splitStrategy is an allocation scheme. GenerateHelper is used to generate a helper for a Plane. Split uses this
 // helper to split a chunk of columns.
 type splitStrategy interface {
-	GenerateHelper(chunks []chunk, compactKeys []string) interface{}
-	Split(dst, src chunk, tag splitTag, axesIndex int, helper interface{})
+	GenerateHelper(axes []Axis, compactKeys []string) interface{}
+	Split(dst, src Axis, tag SplitTag, axesIndex int, helper interface{})
 }
 
 // Strategy is part of the customizable strategy in Matrix generation.

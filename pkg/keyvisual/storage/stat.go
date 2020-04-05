@@ -37,7 +37,7 @@ type LayerConfig struct {
 type layerStat struct {
 	StartTime time.Time
 	EndTime   time.Time
-	RingAxes  []matrix.Axis
+	RingAxes  []Axis
 	RingTimes []time.Time
 
 	Head  int
@@ -54,7 +54,7 @@ func newLayerStat(conf LayerConfig, strategy matrix.Strategy, startTime time.Tim
 	return &layerStat{
 		StartTime: startTime,
 		EndTime:   startTime,
-		RingAxes:  make([]matrix.Axis, conf.Len),
+		RingAxes:  make([]Axis, conf.Len),
 		RingTimes: make([]time.Time, conf.Len),
 		Head:      0,
 		Tail:      0,
@@ -70,33 +70,28 @@ func newLayerStat(conf LayerConfig, strategy matrix.Strategy, startTime time.Tim
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
 		s.StartTime = s.RingTimes[s.Head]
-		s.RingAxes[s.Head] = matrix.Axis{}
+		s.RingAxes[s.Head] = Axis{}
 		s.Head = (s.Head + 1) % s.Len
 		return
 	}
 
-	times := make([]time.Time, 0, s.Ratio+1)
-	times = append(times, s.StartTime)
-	axes := make([]matrix.Axis, 0, s.Ratio)
+	axes := make([]Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
 		s.StartTime = s.RingTimes[s.Head]
-		times = append(times, s.StartTime)
 		axes = append(axes, s.RingAxes[s.Head])
-		s.RingAxes[s.Head] = matrix.Axis{}
+		s.RingAxes[s.Head] = Axis{}
 		s.Head = (s.Head + 1) % s.Len
 	}
 
-	plane := matrix.CreatePlane(times, axes)
-	newAxis := plane.Compact(s.Strategy)
-	newAxis = IntoResponseAxis(newAxis, region.Integration)
-	newAxis = IntoStorageAxis(newAxis, s.Strategy)
-	newAxis.Shrink(uint64(s.Ratio))
-	s.Next.Append(newAxis, s.StartTime)
+	compactAxis := Compact(axes, s.Strategy)
+	newStorageAxis := ConciseStorageAxis(compactAxis, s.Strategy)
+	newStorageAxis.Shrink(uint64(s.Ratio))
+	s.Next.Append(newStorageAxis, s.StartTime)
 }
 
 // Append appends a key axis to layerStat.
-func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
+func (s *layerStat) Append(axis Axis, endTime time.Time) {
 	if s.Head == s.Tail && !s.Empty {
 		s.Reduce()
 	}
@@ -108,7 +103,7 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 }
 
 // Range gets the specify plane in the time range.
-func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes []matrix.Axis) {
+func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes []Axis) {
 	if s.Next != nil {
 		times, axes = s.Next.Range(startTime, endTime)
 	}
@@ -237,7 +232,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	if regions.Len() == 0 {
 		return
 	}
-	axis := CreateStorageAxis(regions, s.strategy)
+	axis := CreateStorageAxisFromRegions(regions, s.strategy)
 
 	s.keyMap.RLock()
 	defer s.keyMap.RUnlock()
@@ -248,14 +243,14 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	s.layers[0].Append(axis, endTime)
 }
 
-func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []matrix.Axis) {
+func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []Axis) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.layers[0].Range(startTime, endTime)
 }
 
 // Range returns a sub Plane with specified range.
-func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, baseTag region.StatTag) matrix.Plane {
+func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, respTag region.StatTag) matrix.Plane {
 	s.keyMap.RLock()
 	defer s.keyMap.RUnlock()
 	s.keyMap.SaveKey(&startKey)
@@ -264,13 +259,14 @@ func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, base
 	times, axes := s.rangeRoot(startTime, endTime)
 
 	if len(times) <= 1 {
-		return matrix.CreateEmptyPlane(startTime, endTime, startKey, endKey, len(region.ResponseTags))
+		return matrix.CreateEmptyPlane(startTime, endTime, startKey, endKey)
 	}
 
+	matrixAxes := make([]matrix.Axis, len(axes))
 	for i, axis := range axes {
 		axis = axis.Range(startKey, endKey)
-		axis = IntoResponseAxis(axis, baseTag)
-		axes[i] = axis
+		matrixAxis := IntoMatrixAxis(axis, respTag)
+		matrixAxes[i] = matrixAxis
 	}
-	return matrix.CreatePlane(times, axes)
+	return matrix.CreatePlane(times, matrixAxes)
 }

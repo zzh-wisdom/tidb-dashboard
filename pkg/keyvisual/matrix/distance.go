@@ -75,8 +75,8 @@ func DistanceStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, label decorator.Label
 	return s
 }
 
-func (s *distanceStrategy) GenerateHelper(chunks []chunk, compactKeys []string) interface{} {
-	axesLen := len(chunks)
+func (s *distanceStrategy) GenerateHelper(Axes []Axis, compactKeys []string) interface{} {
+	axesLen := len(Axes)
 	keysLen := len(compactKeys)
 
 	// generate key distance matrix
@@ -90,30 +90,30 @@ func (s *distanceStrategy) GenerateHelper(chunks []chunk, compactKeys []string) 
 	MemsetInt(virtualColumn, axesLen)
 
 	// calculate left distance
-	updateLeftDis(dis[0], virtualColumn, chunks[0].Keys, compactKeys)
+	updateLeftDis(dis[0], virtualColumn, Axes[0].Keys, compactKeys)
 	for i := 1; i < axesLen; i++ {
-		updateLeftDis(dis[i], dis[i-1], chunks[i].Keys, compactKeys)
+		updateLeftDis(dis[i], dis[i-1], Axes[i].Keys, compactKeys)
 	}
 	// calculate the nearest distance on both sides
 	end := axesLen - 1
-	updateRightDis(dis[end], virtualColumn, chunks[end].Keys, compactKeys)
+	updateRightDis(dis[end], virtualColumn, Axes[end].Keys, compactKeys)
 	for i := end - 1; i >= 0; i-- {
-		updateRightDis(dis[i], dis[i+1], chunks[i].Keys, compactKeys)
+		updateRightDis(dis[i], dis[i+1], Axes[i].Keys, compactKeys)
 	}
 
 	return distanceHelper{
-		Scale: s.GenerateScale(chunks, compactKeys, dis),
+		Scale: s.GenerateScale(Axes, compactKeys, dis),
 	}
 }
 
-func (s *distanceStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, helper interface{}) {
+func (s *distanceStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper interface{}) {
 	CheckPartOf(dst.Keys, src.Keys)
 
 	if len(dst.Keys) == len(src.Keys) {
 		switch tag {
-		case splitTo:
+		case SplitTo:
 			copy(dst.Values, src.Values)
-		case splitAdd:
+		case SplitAdd:
 			for i, v := range src.Values {
 				dst.Values[i] += v
 			}
@@ -131,7 +131,7 @@ func (s *distanceStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, he
 	scale := helper.(distanceHelper).Scale
 
 	switch tag {
-	case splitTo:
+	case SplitTo:
 		for i, key := range src.Keys[1:] {
 			for !equal(dst.Keys[end], key) {
 				end++
@@ -142,7 +142,7 @@ func (s *distanceStrategy) Split(dst, src chunk, tag splitTag, axesIndex int, he
 			}
 			end++
 		}
-	case splitAdd:
+	case SplitAdd:
 		for i, key := range src.Keys[1:] {
 			for !equal(dst.Keys[end], key) {
 				end++
@@ -187,16 +187,16 @@ func (s *distanceStrategy) StopWorkers() {
 	}
 }
 
-func (s *distanceStrategy) GenerateScale(chunks []chunk, compactKeys []string, dis [][]int) [][]float64 {
+func (s *distanceStrategy) GenerateScale(Axes []Axis, compactKeys []string, dis [][]int) [][]float64 {
 	var wg sync.WaitGroup
-	axesLen := len(chunks)
+	axesLen := len(Axes)
 	scale := make([][]float64, axesLen)
 	wg.Add(axesLen)
 	for i := 0; i < axesLen; i++ {
 		s.ScaleWorkers[i%workerCount] <- &scaleTask{
 			WaitGroup:   &wg,
 			Dis:         dis[i],
-			Keys:        chunks[i].Keys,
+			Keys:        Axes[i].Keys,
 			CompactKeys: compactKeys,
 			Scale:       &scale[i],
 		}

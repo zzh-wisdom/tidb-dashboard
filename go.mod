@@ -29,5 +29,6 @@ require (
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 	go.uber.org/fx v1.10.0
 	go.uber.org/zap v1.13.0
+	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
 	google.golang.org/grpc v1.25.1
 )

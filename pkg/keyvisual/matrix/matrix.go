@@ -29,8 +29,8 @@ type Matrix struct {
 }
 
 // CreateMatrix uses the specified times and keys to build an initial matrix with no data.
-func CreateMatrix(strategy Strategy, times []time.Time, keys []string, valuesListLen int) Matrix {
-	dataMap := make(map[string][][]uint64, valuesListLen)
+func CreateMatrix(strategy Strategy, times []time.Time, keys []string) Matrix {
+	dataMap := make(map[string][][]uint64, 1)
 	// collect label keys
 	keyAxis := make([]decorator.LabelKey, len(keys))
 	for i, key := range keys {
