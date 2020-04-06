@@ -178,6 +178,7 @@ func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes
 // StatConfig is the configuration of Stat.
 type StatConfig struct {
 	LayersConfig []LayerConfig
+	ReportConfig
 }
 
 // Stat is composed of multiple layerStats.
@@ -208,7 +209,7 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 		strategy:     strategy,
 		provider:     provider,
 		db:           db,
-		reportManage: NewReportManage(db, startTime.Add(reportInterval)),
+		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
 	}
 
 	lc.Append(fx.Hook{
@@ -293,28 +294,29 @@ func (s *Stat) Restore() {
 	s.mutex.Unlock()
 
 	// restore Report data
-	nowTime := s.reportManage.ReportTime.Add(-reportInterval)
+	initReportTime := s.reportManage.ReportTime
 	err = s.reportManage.RestoreReport()
 	if err != nil {
 		log.Panic("restore report error", zap.Error(err))
 	}
-	log.Debug("all reports", zap.Times("EndTime", s.reportManage.ReportEndTimes))
-	if s.reportManage.IsNeedReport(nowTime) {
+	//log.Debug("all reports", zap.Times("EndTime", s.reportManage.ReportEndTimes))
+	if s.reportManage.IsNeedReport(initReportTime.Add(-s.reportManage.ReportInterval)) {
 		newMatrix := s.generateMatrix()
 		err := s.reportManage.InsertReport(newMatrix)
 		if err != nil {
 			log.Warn("InsertReport error", zap.Error(err))
 		}
-		s.reportManage.ReportTime = nowTime.Add(reportInterval)
+		s.reportManage.ReportTime = initReportTime
 	}
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
 }
 
-func (s *Stat)GetReport(endTime time.Time) (report matrix.Matrix, isFind bool) {
+func (s *Stat) GetReport(startTime, endTime time.Time, startKey, endKey string) (report matrix.Matrix, isFind bool) {
 	report, isFind, err := s.reportManage.FindReport(endTime)
 	if err != nil {
 		log.Warn("GetReport error", zap.Error(err))
 	}
+	report.RangeTimeAndKey(startTime, endTime, startKey, endKey)
 	log.Debug("GetReport", zap.Time("EndTime", endTime), zap.Bool("isFind", isFind))
 	return
 }
@@ -378,11 +380,11 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 }
 
 func (s *Stat) generateMatrix() matrix.Matrix {
-	reportStartTime := s.reportManage.ReportTime.Add(-reportTimeRange)
+	reportStartTime := s.reportManage.ReportTime.Add(-s.reportManage.ReportInterval)
 	reportEndTime := s.reportManage.ReportTime
 	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime))
 	plane := s.Range(reportStartTime, reportEndTime, "", "", region.Integration)
-	newMatrix := plane.Pixel(s.strategy, reportMaxDisplayY, region.GetDisplayTags(region.Integration))
+	newMatrix := plane.Pixel(s.strategy, s.reportManage.ReportMaxDisplayY, region.GetDisplayTags(region.Integration))
 	return newMatrix
 }
 

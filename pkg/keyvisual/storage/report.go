@@ -6,15 +6,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
+
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
-)
-
-const (
-	reportInterval   = time.Minute*10
-	reportTimeRange  = time.Minute*10
-
-	reportMaxDisplayY = 1536
 )
 
 const tableReportName = "matrix_reports"
@@ -43,17 +39,57 @@ func NewReport(startTime, endTime time.Time, matrix matrix.Matrix) (*Report, err
 	}, nil
 }
 
-type ReportManage struct {
-	Db               *dbstore.DB
-	ReportTime       time.Time
-	ReportEndTimes []time.Time
+// ReportConfig is the configuration of ReportManage.
+type ReportConfig struct {
+	ReportInterval    time.Duration
+	ReportTimeRange   time.Duration
+	ReportMaxDisplayY int
+	MaxReportNum      int
 }
 
-func NewReportManage(db *dbstore.DB, reportTime time.Time) *ReportManage {
+// Check checks whether ReportConfig is legal.
+// if not, return the reason
+func (cfg ReportConfig) Check() string {
+	if cfg.ReportMaxDisplayY <= 0 {
+		return "ReportMaxDisplayY must be greater than 0"
+	}
+	if cfg.MaxReportNum <= 0 {
+		return "MaxReportNum must be greater than 0"
+	}
+	return ""
+}
+
+type ReportManage struct {
+	Db         *dbstore.DB
+	ReportTime time.Time
+
+	ReportEndTimes []time.Time
+	Head           int
+	Tail           int
+	Empty          bool
+
+	ReportInterval    time.Duration
+	ReportTimeRange   time.Duration
+	ReportMaxDisplayY int
+	MaxReportNum      int
+}
+
+func NewReportManage(db *dbstore.DB, nowTime time.Time, cfg ReportConfig) *ReportManage {
+	reasonMsg := cfg.Check()
+	if reasonMsg != "" {
+		panic(reasonMsg)
+	}
 	return &ReportManage{
-		Db:               db,
-		ReportTime:       reportTime,
-		ReportEndTimes: make([]time.Time, 0, 2),
+		Db:                db,
+		ReportTime:        nowTime.Add(cfg.ReportInterval),
+		ReportEndTimes:    make([]time.Time, cfg.MaxReportNum),
+		Head:              0,
+		Tail:              0,
+		Empty:             true,
+		ReportInterval:    cfg.ReportInterval,
+		ReportTimeRange:   cfg.ReportTimeRange,
+		ReportMaxDisplayY: cfg.ReportMaxDisplayY,
+		MaxReportNum:      cfg.MaxReportNum,
 	}
 }
 
@@ -63,32 +99,48 @@ func (r *ReportManage) RestoreReport() error {
 	}
 	var reports []Report
 	err := r.Db.Table(tableReportName).Order("start_time").Find(&reports).Error
-	if err == nil && len(reports) != 0 {
-		r.ReportTime = reports[len(reports)-1].EndTime.Add(reportInterval)
-		r.ReportEndTimes = make([]time.Time, len(reports))
-		for i, report := range reports {
+	length := len(reports)
+	if err == nil && length != 0 {
+		startIdx := 0
+		if length > r.MaxReportNum {
+			startIdx = length - r.MaxReportNum
+			dStartTime := reports[0].EndTime
+			dEndTime := reports[startIdx-1].EndTime
+			err := r.Db.
+				Table(tableReportName).
+				Where("end_time >= ? AND end_time <= ?", dStartTime, dEndTime).
+				Delete(&Report{}).Error
+			if err != nil {
+				return err
+				// log.Fatal("Delete Report error", zap.Error(err))
+			}
+			log.Warn("The number of Report in DB is too large. Have deleted extra reports",
+				zap.Int("len(reports)", length), zap.Int("MaxReportNum", r.MaxReportNum))
+		}
+
+		r.ReportTime = reports[length-1].EndTime.Add(r.ReportInterval)
+		r.Head = 0
+		r.Tail = (length - startIdx) % r.MaxReportNum
+		r.Empty = false
+		for i, report := range reports[startIdx:length] {
 			r.ReportEndTimes[i] = report.EndTime
 		}
 	}
-	return nil
+	return err
 }
 
 func (r *ReportManage) IsNeedReport(nowTime time.Time) bool {
 	return !r.ReportTime.After(nowTime)
 }
 
-// Not be used
-func (r *ReportManage) UpdateReportTime(time time.Time) {
-	nextTime := r.ReportTime.Add(reportInterval)
-	if nextTime.After(time) {
-		r.ReportTime = nextTime
-	} else {
-		r.ReportTime = time
-	}
-}
-
 func (r *ReportManage) InsertReport(matrix matrix.Matrix) error {
-	startTime := r.ReportTime.Add(-reportInterval)
+	if r.Head == r.Tail && !r.Empty {
+		err := r.DeleteReport()
+		if err != nil {
+			return err
+		}
+	}
+	startTime := r.ReportTime.Add(-r.ReportInterval)
 	endTime := r.ReportTime
 	report, err := NewReport(startTime, endTime, matrix)
 	if err != nil {
@@ -98,25 +150,52 @@ func (r *ReportManage) InsertReport(matrix matrix.Matrix) error {
 	if err != nil {
 		return err
 	}
-	r.ReportEndTimes = append(r.ReportEndTimes, endTime)
-	r.ReportTime = r.ReportTime.Add(reportInterval)
+	r.ReportEndTimes[r.Tail] = endTime
+	r.Empty = false
+	r.Tail = (r.Tail + 1) % r.MaxReportNum
+	// update ReportTime
+	r.ReportTime = r.ReportTime.Add(r.ReportInterval)
+	return nil
+}
+
+func (r *ReportManage) DeleteReport() error {
+	if r.Empty {
+		return nil
+	}
+	EndTime := r.ReportEndTimes[r.Head]
+	err := r.Db.
+		Table(tableReportName).
+		Where("end_time == ?", EndTime).
+		Delete(&Report{}).Error
+	if err != nil {
+		return err
+	}
+	r.Head = (r.Head + 1) % r.MaxReportNum
+	if r.Head == r.Tail {
+		r.Empty = true
+	}
 	return nil
 }
 
 func (r *ReportManage) FindReport(endTime time.Time) (matrix matrix.Matrix, isFind bool, err error) {
 	isFind = false
 	err = nil
-	if len(r.ReportEndTimes) == 0 {
+	if r.Empty {
 		return
 	}
-	idx := sort.Search(len(r.ReportEndTimes), func(i int) bool {
-		return !r.ReportEndTimes[i].Before(endTime)
+	num := r.MaxReportNum
+	if r.Tail != r.Head {
+		num = (r.Tail - r.Head + r.MaxReportNum) % r.MaxReportNum
+	}
+	idx := sort.Search(num, func(i int) bool {
+		return !r.ReportEndTimes[(r.Head+i)%r.MaxReportNum].Before(endTime)
 	})
-	if idx == len(r.ReportEndTimes) {
+	if idx == num {
 		return
 	}
+	targetTime := r.ReportEndTimes[(r.Head+idx)%r.MaxReportNum]
 	var report Report
-	err = r.Db.Table(tableReportName).Where("end_time = ?", r.ReportEndTimes[idx]).Find(&report).Error
+	err = r.Db.Table(tableReportName).Where("end_time = ?", targetTime).Find(&report).Error
 	if err != nil {
 		return
 	}

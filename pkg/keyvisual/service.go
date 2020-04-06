@@ -59,6 +59,12 @@ var (
 			{Len: 60 / 30 * 24 * 6, Ratio: 4 * 60 / 30}, // step 30 minutes, total 288, 6 days (sum: 1 weeks)
 			{Len: 24 / 4 * 28, Ratio: 0},                // step 4 hours, total 168, 4 weeks (sum: 5 weeks)
 		},
+		ReportConfig: storage.ReportConfig{
+			ReportInterval:    time.Second * 10,
+			ReportTimeRange:   time.Second * 10,
+			ReportMaxDisplayY: 1536,
+			MaxReportNum:      2, // 5 weeks
+		},
 	}
 )
 
@@ -225,7 +231,7 @@ func (s *Service) heatmaps(c *gin.Context) {
 
 	// report test
 	if endKey != "" || startKey != "" {
-		resp, isFind := s.stat.GetReport(endTime)
+		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey)
 		if isFind {
 			resp.DataMap = map[string][][]uint64{
 				typ: resp.DataMap[typ],
@@ -237,7 +243,7 @@ func (s *Service) heatmaps(c *gin.Context) {
 
 	plane := s.stat.Range(startTime, endTime, startKey, endKey, baseTag)
 	resp := plane.Pixel(s.strategy, heatmapsMaxDisplayY, region.GetDisplayTags(baseTag))
-	resp.Range(startKey, endKey)
+	resp.RangeKey(startKey, endKey)
 	// TODO: An expedient to reduce data transmission, which needs to be deleted later.
 	resp.DataMap = map[string][][]uint64{
 		typ: resp.DataMap[typ],

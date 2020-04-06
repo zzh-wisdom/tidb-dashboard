@@ -15,6 +15,7 @@
 package matrix
 
 import (
+	"sort"
 	"time"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
@@ -59,7 +60,7 @@ func CreateMatrix(strategy Strategy, times []time.Time, keys []string, valuesLis
 }
 
 // Range returns a sub Matrix with specified range.
-func (mx *Matrix) Range(startKey, endKey string) {
+func (mx *Matrix) RangeKey(startKey, endKey string) {
 	start, end, ok := KeysRange(mx.Keys, startKey, endKey)
 	if !ok {
 		panic("unreachable")
@@ -70,5 +71,37 @@ func (mx *Matrix) Range(startKey, endKey string) {
 		for i, axis := range data {
 			data[i] = axis[start : end-1]
 		}
+	}
+}
+
+// Range returns a sub Matrix with specified range.
+func (mx *Matrix) RangeTimeAndKey(startTime, endTime time.Time, startKey, endKey string) {
+	start, end, ok := KeysRange(mx.Keys, startKey, endKey)
+	if !ok {
+		panic("unreachable")
+	}
+	mx.Keys = mx.Keys[start:end]
+	mx.KeyAxis = mx.KeyAxis[start:end]
+	for _, data := range mx.DataMap {
+		for i, axis := range data {
+			data[i] = axis[start : end-1]
+		}
+	}
+
+	startTimeUnix := startTime.Unix()
+	endTimeUnix := endTime.Unix()
+	timesSize := len(mx.TimeAxis)
+	start = sort.Search(timesSize, func(i int) bool {
+		return mx.TimeAxis[i] > startTimeUnix
+	})
+	end = sort.Search(timesSize, func(i int) bool {
+		return mx.TimeAxis[i] >= endTimeUnix
+	})
+	if end != timesSize {
+		end++
+	}
+	mx.TimeAxis = mx.TimeAxis[start:end]
+	for key := range mx.DataMap {
+		mx.DataMap[key] = mx.DataMap[key][start:end]
 	}
 }
