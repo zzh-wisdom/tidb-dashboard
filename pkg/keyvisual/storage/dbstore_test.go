@@ -36,17 +36,17 @@ func (t *testDbstoreSuite) TearDownTest(c *C) {
 	t.db.Close()
 }
 
-func (t *testDbstoreSuite) TestCreateTablePlaneIfNotExists(c *C) {
-	isExist, err := CreateTablePlaneIfNotExists(t.db)
+func (t *testDbstoreSuite) TestCreateTableIfNotExists(c *C) {
+	isExist, err := CreateTableIfNotExists(t.db, &Plane{})
 	c.Assert(isExist, Equals, false)
 	c.Assert(err, IsNil)
-	isExist, err = CreateTablePlaneIfNotExists(t.db)
+	isExist, err = CreateTableIfNotExists(t.db, &Plane{})
 	c.Assert(isExist, Equals, true)
 	c.Assert(err, IsNil)
 }
 
-func (t *testDbstoreSuite) TestClearTablePlane(c *C) {
-	_, err := CreateTablePlaneIfNotExists(t.db)
+func (t *testDbstoreSuite) TestClearTable(c *C) {
+	_, err := CreateTableIfNotExists(t.db, &Plane{})
 	if err != nil {
 		c.Fatalf("Create table Plane error: %v", err)
 	}
@@ -61,7 +61,7 @@ func (t *testDbstoreSuite) TestClearTablePlane(c *C) {
 	}
 	c.Assert(count, Equals, 1)
 
-	err = ClearTablePlane(t.db)
+	err = ClearTable(t.db, &Plane{})
 	c.Assert(err, IsNil)
 
 	err = t.db.Table(tablePlaneName).Count(&count).Error
@@ -72,7 +72,7 @@ func (t *testDbstoreSuite) TestClearTablePlane(c *C) {
 }
 
 func (t *testDbstoreSuite) TestInsertPlane(c *C) {
-	_, err := CreateTablePlaneIfNotExists(t.db)
+	_, err := CreateTableIfNotExists(t.db, &Plane{})
 	if err != nil {
 		c.Fatalf("Create table Plane error: %v", err)
 	}
@@ -99,7 +99,7 @@ func (t *testDbstoreSuite) TestInsertPlane(c *C) {
 }
 
 func (t *testDbstoreSuite) TestDeletePlane(c *C) {
-	_, err := CreateTablePlaneIfNotExists(t.db)
+	_, err := CreateTableIfNotExists(t.db, &Plane{})
 	if err != nil {
 		c.Fatalf("Create table Plane error: %v", err)
 	}
@@ -129,7 +129,7 @@ func (t *testDbstoreSuite) TestDeletePlane(c *C) {
 }
 
 func (t *testDbstoreSuite) TestFindPlaneOrderByTime(c *C) {
-	_, err := CreateTablePlaneIfNotExists(t.db)
+	_, err := CreateTableIfNotExists(t.db, &Plane{})
 	if err != nil {
 		c.Fatalf("Create table Plane error: %v", err)
 	}

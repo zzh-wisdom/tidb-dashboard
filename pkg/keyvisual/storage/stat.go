@@ -242,51 +242,54 @@ func (s *Stat) Restore() {
 	}
 
 	// table planes preprocess
-	isExist, err := CreateTablePlaneIfNotExists(s.db)
+	isExist1, err := CreateTableIfNotExists(s.db, &Plane{})
 	if err != nil {
-		log.Panic("Create table plane fail", zap.Error(err))
+		log.Panic("Create table Plane fail", zap.Error(err))
 	}
-	if !isExist {
+	isExist2, err := CreateTableIfNotExists(s.db, &KeyIntern{})
+	if err != nil {
+		log.Panic("Create table KeyIntern fail", zap.Error(err))
+	}
+	if isExist1 != isExist2 {
+		log.Panic("table Plane and KeyIntern should exist or not exist at the same time.")
+	}
+
+	if !isExist1 {
 		createStartPlanes()
 	} else {
 		// load data from db
-		num := 0
-		for ; ; num++ {
-			planes, err := FindPlaneOrderByTime(s.db, uint8(num))
-			log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1), zap.Error(err))
-			if err != nil || len(planes) == 0 {
-				break
-			}
-			if len(planes) > 1 {
-				s.layers[num].Empty = false
-			} else if num == 0 {
-				// no valid data was stored，clear
-				err := ClearTablePlane(s.db)
-				log.Debug("Clear table plane", zap.Error(err))
-				break
-			}
-
-			// the first plane is only used to save starttime,
-			s.layers[num].StartTime = planes[0].Time
-			s.layers[num].Head = 0
-			n := len(planes) - 1
-			if n > s.layers[num].Len {
-				log.Panic("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
-			}
-			s.layers[num].EndTime = planes[n].Time
-			s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
-			for i, plane := range planes[1 : n+1] {
-				s.layers[num].RingTimes[i] = plane.Time
-				axis, err := plane.UnmarshalAxis()
-				if err != nil {
-					panic("Unexpected plane unmarshal error!")
-				}
-				s.keyMap.SaveKeys(axis.Keys)
-				s.layers[num].RingAxes[i] = axis
-			}
+		planes, err := ReadAllPlane(s.db)
+		if err != nil {
+			log.Panic("ReadAllPlane fail", zap.Error(err))
 		}
-		if num == 0 {
+
+		if len(planes) == 0 || len(planes[0].Axes) <= 1 {
+			err := ClearTable(s.db, &Plane{})
+			log.Debug("Clear table plane")
+			if err != nil {
+				log.Fatal("Clear table plane", zap.Error(err))
+			}
 			createStartPlanes()
+		} else {
+			for num, plane := range planes {
+				log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(plane.Axes)-1), zap.Error(err))
+
+				s.layers[num].Empty = len(plane.Axes) <= 1
+				// the first plane is only used to save starttime,
+				s.layers[num].StartTime = plane.Times[0]
+				s.layers[num].Head = 0
+				n := len(plane.Axes) - 1
+				if n > s.layers[num].Len {
+					log.Panic("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
+				}
+				s.layers[num].EndTime = plane.Times[n]
+				s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
+				for i, axis := range plane.Axes[1 : n+1] {
+					s.keyMap.SaveKeys(axis.Keys)
+					s.layers[num].RingTimes[i] = plane.Times[i]
+					s.layers[num].RingAxes[i] = axis
+				}
+			}
 		}
 	}
 

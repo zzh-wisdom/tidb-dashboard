@@ -60,10 +60,10 @@ var (
 			{Len: 24 / 4 * 28, Ratio: 0},                // step 4 hours, total 168, 4 weeks (sum: 5 weeks)
 		},
 		ReportConfig: storage.ReportConfig{
-			ReportInterval:    time.Second * 10,
-			ReportTimeRange:   time.Second * 10,
+			ReportInterval:    time.Minute * 10,
+			ReportTimeRange:   time.Minute * 10,
 			ReportMaxDisplayY: 1536,
-			MaxReportNum:      2, // 5 weeks
+			MaxReportNum:      5 * 7 * 24 * 60 / 10, // 5 weeks
 		},
 	}
 )
