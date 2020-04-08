@@ -112,6 +112,10 @@ func (t *testReportSuite) TestRestoreReport(c *C) {
 	c.Assert(t.reportManage.Empty, Equals, false)
 	c.Assert(t.reportManage.ReportEndTimes[0].Unix(), Equals, endTime2.Unix())
 	c.Assert(t.reportManage.ReportEndTimes[1].Unix(), Equals, endTime3.Unix())
+
+	var count int
+	t.reportManage.Db.Table(tableReportName).Count(&count)
+	c.Assert(count, Equals, t.reportManage.MaxReportNum)
 }
 
 func (t *testReportSuite) TestIsNeedReport(c *C) {
