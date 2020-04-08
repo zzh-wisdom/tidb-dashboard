@@ -272,7 +272,7 @@ func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, labelStrategy decorator.La
 }
 
 func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
-	stat := storage.NewStat(lc, wg, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
+	stat := storage.NewStat(lc, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

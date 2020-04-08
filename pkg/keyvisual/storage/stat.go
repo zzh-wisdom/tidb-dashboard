@@ -49,14 +49,14 @@ type layerStat struct {
 	Empty bool
 	Len   int
 
-	Db *dbstore.DB
+	BUM *BackUpManage
 	// Hierarchical mechanism
 	Strategy matrix.Strategy
 	Ratio    int
 	Next     *layerStat
 }
 
-func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *layerStat {
+func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTime time.Time, bum *BackUpManage) *layerStat {
 	return &layerStat{
 		StartTime: startTime,
 		EndTime:   startTime,
@@ -67,7 +67,7 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 		Tail:      0,
 		Empty:     true,
 		Len:       conf.Len,
-		Db:        db,
+		BUM:       bum,
 		Strategy:  strategy,
 		Ratio:     conf.Ratio,
 		Next:      nil,
@@ -77,7 +77,7 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 // Reduce merges ratio axes and append to next layerStat
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
-		err := DeletePlane(s.Db, s.Num, s.StartTime)
+		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
@@ -91,7 +91,7 @@ func (s *layerStat) Reduce() {
 	axes := make([]matrix.Axis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
-		err := DeletePlane(s.Db, s.Num, s.StartTime)
+		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
@@ -115,7 +115,7 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 		s.Reduce()
 	}
 
-	err := InsertPlane(s.Db, s.Num, endTime, axis)
+	err := s.BUM.InsertPlane(s.Num, endTime, axis)
 	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
 
 	s.RingAxes[s.Tail] = axis
@@ -186,20 +186,20 @@ type Stat struct {
 	mutex  sync.RWMutex
 	layers []*layerStat
 
-	keyMap   matrix.KeyMap
 	strategy matrix.Strategy
 
 	provider *region.PDDataProvider
 
-	db           *dbstore.DB
 	reportManage *ReportManage
+	backUpManage *BackUpManage
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
+func NewStat(lc fx.Lifecycle, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
+	bum := NewBackUpManage(db)
 	for i, c := range cfg.LayersConfig {
-		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, db)
+		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, bum)
 		if i > 0 {
 			layers[i-1].Next = layers[i]
 		}
@@ -208,97 +208,52 @@ func NewStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvide
 		layers:       layers,
 		strategy:     strategy,
 		provider:     provider,
-		db:           db,
 		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
+		backUpManage: bum,
 	}
 
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			s.Restore()
-			wg.Add(1)
-			go func() {
-				s.rebuildRegularly(ctx)
-				wg.Done()
-			}()
+		OnStart: func(context.Context) error {
+			s.Restore(startTime)
 			return nil
 		},
 	})
-	//s.Load()
+
 	return s
 }
 
 // Restore data from disk the first time service starts
-func (s *Stat) Restore() {
+func (s *Stat) Restore(startTime time.Time) {
 	log.Debug("keyviz: restore data from dbstore")
 	s.mutex.Lock()
-	s.keyMap.RLock()
 
-	// establish start `Plane` for each layer
-	createStartPlanes := func() {
-		for i, layer := range s.layers {
-			err := InsertPlane(s.db, uint8(i), layer.StartTime, matrix.Axis{})
-			log.Debug("Insert startTime plane", zap.Uint8("Num", uint8(i)), zap.Time("StartTime", layer.StartTime), zap.Error(err))
-		}
-	}
+	planes := s.backUpManage.Restore(len(s.layers), startTime)
+	if len(planes) != 0 {
+		for num, plane := range planes {
+			log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(plane.Axes)-1))
 
-	// table planes preprocess
-	isExist1, err := CreateTableIfNotExists(s.db, &Plane{})
-	if err != nil {
-		log.Panic("Create table Plane fail", zap.Error(err))
-	}
-	isExist2, err := CreateTableIfNotExists(s.db, &KeyIntern{})
-	if err != nil {
-		log.Panic("Create table KeyIntern fail", zap.Error(err))
-	}
-	if isExist1 != isExist2 {
-		log.Panic("table Plane and KeyIntern should exist or not exist at the same time.")
-	}
-
-	if !isExist1 {
-		createStartPlanes()
-	} else {
-		// load data from db
-		planes, err := ReadAllPlane(s.db)
-		if err != nil {
-			log.Panic("ReadAllPlane fail", zap.Error(err))
-		}
-
-		if len(planes) == 0 || len(planes[0].Axes) <= 1 {
-			err := ClearTable(s.db, &Plane{})
-			log.Debug("Clear table plane")
-			if err != nil {
-				log.Fatal("Clear table plane", zap.Error(err))
+			s.layers[num].Empty = len(plane.Axes) <= 1
+			s.layers[num].StartTime = plane.Times[0]
+			s.layers[num].Head = 0
+			n := len(plane.Axes)
+			if n > s.layers[num].Len {
+				log.Fatal("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
 			}
-			createStartPlanes()
-		} else {
-			for num, plane := range planes {
-				log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(plane.Axes)-1), zap.Error(err))
-
-				s.layers[num].Empty = len(plane.Axes) <= 1
-				// the first plane is only used to save starttime,
-				s.layers[num].StartTime = plane.Times[0]
-				s.layers[num].Head = 0
-				n := len(plane.Axes) - 1
-				if n > s.layers[num].Len {
-					log.Panic("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
-				}
-				s.layers[num].EndTime = plane.Times[n]
-				s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
-				for i, axis := range plane.Axes[1 : n+1] {
-					s.keyMap.SaveKeys(axis.Keys)
-					s.layers[num].RingTimes[i] = plane.Times[i]
-					s.layers[num].RingAxes[i] = axis
-				}
+			s.layers[num].EndTime = plane.Times[n]
+			s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
+			tempTime := plane.Times[1 : n+1]
+			for i, axis := range plane.Axes {
+				s.layers[num].RingTimes[i] = tempTime[i]
+				s.layers[num].RingAxes[i] = axis
 			}
 		}
 	}
 
-	s.keyMap.RUnlock()
 	s.mutex.Unlock()
 
 	// restore Report data
 	initReportTime := s.reportManage.ReportTime
-	err = s.reportManage.RestoreReport()
+	err := s.reportManage.RestoreReport()
 	if err != nil {
 		log.Panic("restore report error", zap.Error(err))
 	}
@@ -324,47 +279,12 @@ func (s *Stat) GetReport(startTime, endTime time.Time, startKey, endKey string) 
 	return
 }
 
-func (s *Stat) rebuildKeyMap() {
-	s.keyMap.Lock()
-	defer s.keyMap.Unlock()
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	s.keyMap.Map = sync.Map{}
-
-	for _, layer := range s.layers {
-		for _, axis := range layer.RingAxes {
-			if len(axis.Keys) > 0 {
-				s.keyMap.SaveKeys(axis.Keys)
-			}
-		}
-	}
-}
-
-func (s *Stat) rebuildRegularly(ctx context.Context) {
-	ticker := time.NewTicker(time.Hour * 24)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.rebuildKeyMap()
-		}
-	}
-}
-
 // Append adds the latest full statistics.
 func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	if regions.Len() == 0 {
 		return
 	}
 	axis := CreateStorageAxis(regions, s.strategy)
-
-	s.keyMap.RLock()
-	//defer s.keyMap.RUnlock()
-	s.keyMap.SaveKeys(axis.Keys)
-	s.keyMap.RUnlock()
 
 	s.mutex.Lock()
 	//defer s.mutex.Unlock()
@@ -399,10 +319,8 @@ func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []matrix.Ax
 
 // Range returns a sub Plane with specified range.
 func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, baseTag region.StatTag) matrix.Plane {
-	s.keyMap.RLock()
-	defer s.keyMap.RUnlock()
-	s.keyMap.SaveKey(&startKey)
-	s.keyMap.SaveKey(&endKey)
+	s.backUpManage.InternKey(&startKey)
+	s.backUpManage.InternKey(&endKey)
 
 	times, axes := s.rangeRoot(startTime, endTime)
 
