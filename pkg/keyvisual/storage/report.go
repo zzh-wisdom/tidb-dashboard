@@ -100,7 +100,7 @@ func (r *ReportManage) RestoreReport() error {
 	var reports []Report
 	err := r.Db.Table(tableReportName).Order("start_time").Find(&reports).Error
 	length := len(reports)
-	log.Debug("RestoreReport",zap.Int("Len", length))
+	log.Debug("RestoreReport", zap.Int("Len", length))
 	if err == nil && length != 0 {
 		startIdx := 0
 		if length > r.MaxReportNum {
