@@ -86,11 +86,32 @@ func (s *layerStat) Reduce() {
 		return
 	}
 
+	//if s.RingAxes[s.Head].IsSep {
+	//	err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
+	//	log.Debug("Delete Segmentation Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+	//
+	//	s.StartTime = s.RingTimes[s.Head]
+	//	newAxis := s.RingAxes[s.Head]
+	//	s.RingAxes[s.Head] = matrix.Axis{}
+	//	s.Head = (s.Head + 1) % s.Len
+	//
+	//	s.Next.Append(newAxis, s.StartTime)
+	//	return
+	//}
+
 	times := make([]time.Time, 0, s.Ratio+1)
 	times = append(times, s.StartTime)
 	axes := make([]matrix.Axis, 0, s.Ratio)
 
-	for i := 0; i < s.Ratio; i++ {
+	// 注意将IsSep也持久化
+	high := s.Ratio
+	if s.RingAxes[s.Head].IsSep {
+		high = 1
+	}
+	for i := 0; i < high; i++ {
+		if s.RingAxes[s.Head].IsSep && i != 0 {
+			break
+		}
 		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
@@ -99,6 +120,10 @@ func (s *layerStat) Reduce() {
 		axes = append(axes, s.RingAxes[s.Head])
 		s.RingAxes[s.Head] = matrix.Axis{}
 		s.Head = (s.Head + 1) % s.Len
+	}
+	if len(axes) == 1 {
+		s.Next.Append(axes[0], s.StartTime)
+		return
 	}
 
 	plane := matrix.CreatePlane(times, axes)
@@ -179,6 +204,7 @@ func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes
 type StatConfig struct {
 	LayersConfig []LayerConfig
 	ReportConfig
+	MaxDowntime time.Duration
 }
 
 // Stat is composed of multiple layerStats.
@@ -191,7 +217,9 @@ type Stat struct {
 	provider *region.PDDataProvider
 
 	reportManage *ReportManage
+
 	backUpManage *BackUpManage
+	maxDowntime  time.Duration
 }
 
 // NewStat generates a Stat based on the configuration.
@@ -210,6 +238,7 @@ func NewStat(lc fx.Lifecycle, provider *region.PDDataProvider, cfg StatConfig, s
 		provider:     provider,
 		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
 		backUpManage: bum,
+		maxDowntime:  cfg.MaxDowntime,
 	}
 
 	lc.Append(fx.Hook{
@@ -230,7 +259,7 @@ func (s *Stat) Restore(startTime time.Time) {
 	planes := s.backUpManage.Restore(len(s.layers), startTime)
 	if len(planes) != 0 {
 		for num, plane := range planes {
-			log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(plane.Axes)-1))
+			log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(plane.Axes)))
 
 			s.layers[num].Empty = len(plane.Axes) <= 1
 			s.layers[num].StartTime = plane.Times[0]
@@ -247,6 +276,12 @@ func (s *Stat) Restore(startTime time.Time) {
 				s.layers[num].RingAxes[i] = axis
 			}
 		}
+	}
+
+	if !startTime.Before(s.getLastestEndTime().Add(s.maxDowntime)) {
+		log.Debug("New Segmentation Axis", zap.Time("EndTime", startTime))
+		sepAxis := matrix.CreateSepAxis(len(region.StorageTags))
+		s.layers[0].Append(sepAxis, startTime)
 	}
 
 	s.mutex.Unlock()
@@ -269,12 +304,18 @@ func (s *Stat) Restore(startTime time.Time) {
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
 }
 
+func (s *Stat) getLastestEndTime() time.Time {
+	return s.layers[0].EndTime
+}
+
 func (s *Stat) GetReport(startTime, endTime time.Time, startKey, endKey string) (report matrix.Matrix, isFind bool) {
 	report, isFind, err := s.reportManage.FindReport(endTime)
 	if err != nil {
 		log.Warn("GetReport error", zap.Error(err))
 	}
-	report.RangeTimeAndKey(startTime, endTime, startKey, endKey)
+	if isFind {
+		report.RangeTimeAndKey(startTime, endTime, startKey, endKey)
+	}
 	log.Debug("GetReport", zap.Time("EndTime", endTime), zap.Bool("isFind", isFind))
 	return
 }

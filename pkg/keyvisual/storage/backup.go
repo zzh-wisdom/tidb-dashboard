@@ -33,6 +33,7 @@ func (KeyIntern) TableName() string {
 type Axis struct {
 	Keys       []uint64
 	ValuesList [][]uint64
+	IsSep      bool
 }
 
 type Plane struct {
@@ -100,6 +101,7 @@ func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis matrix.Axis) 
 	newAxis := Axis{
 		Keys:       make([]uint64, len(axis.Keys)),
 		ValuesList: axis.ValuesList,
+		IsSep:      axis.IsSep,
 	}
 	for i, key := range axis.Keys {
 		newAxis.Keys[i] = getKeyID(key)
@@ -240,6 +242,7 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 			}
 			axes[i].ValuesList = axis.ValuesList
 			axes[i].Keys = make([]string, len(axis.Keys))
+			axes[i].IsSep = axis.IsSep
 			for j := range axis.Keys {
 				axes[i].Keys[j] = IDKeyMap[axis.Keys[j]]
 			}
@@ -263,8 +266,14 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 		log.Fatal("Clear table KeyIntern error", zap.Error(err))
 	}
 	for num := range matrixPlanes {
+		// startPlane
+		err := b.InsertPlane(uint8(num), matrixPlanes[num].Times[0], matrix.Axis{})
+		if err != nil {
+			log.Fatal("InsertPlane error", zap.Error(err))
+		}
+		tempTimes := matrixPlanes[num].Times[1:]
 		for i, axis := range matrixPlanes[num].Axes {
-			err := b.InsertPlane(uint8(num), matrixPlanes[num].Times[i], axis)
+			err := b.InsertPlane(uint8(num), tempTimes[i], axis)
 			if err != nil {
 				log.Fatal("InsertPlane error", zap.Error(err))
 			}

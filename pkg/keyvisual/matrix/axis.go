@@ -17,8 +17,10 @@ package matrix
 // the StartKey of its next bucket. The actual data structure is stored in columns. Therefore satisfies:
 // len(Keys) == len(ValuesList[i]) + 1. In particular, ValuesList[0] is the base column.
 type Axis struct {
-	Keys       []string   `json:"keys,omitempty"`
-	ValuesList [][]uint64 `json:"values_list,omitempty"`
+	Keys       []string
+	ValuesList [][]uint64
+
+	IsSep bool
 }
 
 // CreateAxis checks the given parameters and uses them to build the Axis.
@@ -50,6 +52,21 @@ func CreateEmptyAxis(startKey, endKey string, valuesListLen int) Axis {
 		valuesList[i] = values
 	}
 	return CreateAxis(keys, valuesList)
+}
+
+// CreateEmptyAxis constructs a segmentation Axis
+func CreateSepAxis(valuesListLen int) Axis {
+	keys := []string{"", ""}
+	values := []uint64{0}
+	valuesList := make([][]uint64, valuesListLen)
+	for i := range valuesList {
+		valuesList[i] = values
+	}
+	return Axis{
+		Keys:       keys,
+		ValuesList: valuesList,
+		IsSep:      true,
+	}
 }
 
 // Shrink reduces all statistical values.
