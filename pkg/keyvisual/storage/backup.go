@@ -278,7 +278,6 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 			if err != nil {
 				log.Fatal("unexpected error", zap.Error(err))
 			}
-			log.Debug("unmarshalAxis", zap.Int("len", len(axis.ValuesList)))
 			tempAxes[i].ValuesList = axis.ValuesList
 			tempAxes[i].KeysList = make([][]string, len(axis.KeysList))
 			tempAxes[i].IsSep = axis.IsSep
