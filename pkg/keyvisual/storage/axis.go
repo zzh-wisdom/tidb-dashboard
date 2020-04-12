@@ -16,6 +16,8 @@ package storage
 import (
 	"time"
 
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
+
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 )
 
@@ -23,39 +25,46 @@ import (
 // the StartKey of its next bucket. The actual data structure is stored in columns. Therefore satisfies:
 // len(Keys) == len(ValuesList[i]) + 1. In particular, ValuesList[0] is the base column.
 type MemAxis struct {
-	Keys       []string
+	KeysList   [][]string
 	ValuesList [][]uint64
 }
 
 // CreateAxis checks the given parameters and uses them to build the Axis.
-func CreateStorageAxis(keys []string, valuesList [][]uint64) MemAxis {
-	keysLen := len(keys)
-	if keysLen <= 1 {
-		panic("Keys length must be greater than 1")
+func CreateMemAxis(keysList [][]string, valuesList [][]uint64) MemAxis {
+	if len(keysList) == 0 {
+		panic("KeysList length must be greater than 0")
 	}
 	if len(valuesList) == 0 {
 		panic("ValuesList length must be greater than 0")
 	}
-	for _, values := range valuesList {
-		if keysLen != len(values)+1 {
+	if len(keysList) != len(valuesList) {
+		panic("KeysList length must be equal to ValuesList length")
+	}
+	for i := range valuesList {
+		if len(keysList[i]) <= 1 {
+			panic("Keys length must be greater than 1")
+		}
+		if len(keysList[i]) != len(valuesList[i])+1 {
 			panic("Keys length must be equal to Values length + 1")
 		}
 	}
 	return MemAxis{
-		Keys:       keys,
+		KeysList:   keysList,
 		ValuesList: valuesList,
 	}
 }
 
 // CreateEmptyAxis constructs a minimal empty Axis with the given parameters.
-func CreateEmptyStorageAxis(startKey, endKey string, valuesListLen int) MemAxis {
+func CreateEmptyMemAxis(startKey, endKey string, valuesListLen int) MemAxis {
 	keys := []string{startKey, endKey}
 	values := []uint64{0}
+	keysList := make([][]string, valuesListLen)
 	valuesList := make([][]uint64, valuesListLen)
 	for i := range valuesList {
+		keysList[i] = keys
 		valuesList[i] = values
 	}
-	return CreateStorageAxis(keys, valuesList)
+	return CreateMemAxis(keysList, valuesList)
 }
 
 // Shrink reduces all statistical values.
@@ -68,77 +77,71 @@ func (axis *MemAxis) Shrink(ratio uint64) {
 }
 
 // Range returns a sub Axis with specified range.
-func (axis *MemAxis) Range(startKey string, endKey string) MemAxis {
-	start, end, ok := matrix.KeysRange(axis.Keys, startKey, endKey)
+func (axis *MemAxis) Range(startKey string, endKey string, tag region.StatTag) matrix.Axis {
+	index := int(tag)
+	start, end, ok := matrix.KeysRange(axis.KeysList[index], startKey, endKey)
 	if !ok {
-		return CreateEmptyStorageAxis(startKey, endKey, len(axis.ValuesList))
+		return matrix.CreateEmptyAxis(startKey, endKey)
 	}
-	keys := axis.Keys[start:end]
-	valuesList := make([][]uint64, len(axis.ValuesList))
-	for i := range valuesList {
-		valuesList[i] = axis.ValuesList[i][start : end-1]
-	}
-	return CreateStorageAxis(keys, valuesList)
+	keys := axis.KeysList[index][start:end]
+	values := axis.ValuesList[index][start : end-1]
+	return matrix.CreateAxis(keys, values)
 }
 
 // Focus uses the base column as the chunk for the Focus operation to obtain the partitioning scheme, and uses this to
 // reduce other columns.
-func (axis *MemAxis) Focus(strategy matrix.Strategy, threshold uint64, ratio int, target int) MemAxis {
-	if target >= len(axis.Keys)-1 {
-		return *axis
-	}
-
-	baseAxis := matrix.CreateAxis(axis.Keys, axis.ValuesList[0])
-	newAxis := baseAxis.Focus(strategy, threshold, ratio, target)
-	valuesListLen := len(axis.ValuesList)
-	newValuesList := make([][]uint64, valuesListLen)
-	newValuesList[0] = newAxis.Values
-	for i := 1; i < valuesListLen; i++ {
-		baseAxis.SetValues(axis.ValuesList[i])
-		newValuesList[i] = baseAxis.Reduce(newAxis.Keys).Values
-	}
-	return CreateStorageAxis(newAxis.Keys, newValuesList)
-}
+//func (axis *MemAxis) Focus(strategy matrix.Strategy, threshold uint64, ratio int, target int) MemAxis {
+//	keysList := make([][]string, len(axis.ValuesList))
+//	valuesList := make([][]uint64, len(axis.ValuesList))
+//	for i := range axis.ValuesList {
+//		if target >= len(axis.KeysList[i])-1 {
+//			keysList[i] = axis.KeysList[i]
+//			valuesList[i] = axis.ValuesList[i]
+//		} else {
+//			matrixAxis := matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i])
+//			newMatrixAxis := matrixAxis.Focus(strategy, threshold, ratio, target)
+//			keysList[i] = newMatrixAxis.Keys
+//			valuesList[i] = newMatrixAxis.Values
+//		}
+//	}
+//	return CreateMemAxis(keysList, valuesList)
+//}
 
 // Divide uses the base column as the chunk for the Divide operation to obtain the partitioning scheme, and uses this to
 // reduce other columns.
 func (axis *MemAxis) Divide(strategy matrix.Strategy, target int) MemAxis {
-	if target >= len(axis.Keys)-1 {
-		return *axis
+	keysList := make([][]string, len(axis.ValuesList))
+	valuesList := make([][]uint64, len(axis.ValuesList))
+	for i := range axis.ValuesList {
+		if target >= len(axis.KeysList[i])-1 {
+			keysList[i] = axis.KeysList[i]
+			valuesList[i] = axis.ValuesList[i]
+		} else {
+			matrixAxis := matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i])
+			newMatrixAxis := matrixAxis.Divide(strategy, target)
+			keysList[i] = newMatrixAxis.Keys
+			valuesList[i] = newMatrixAxis.Values
+		}
 	}
-
-	baseAxis := matrix.CreateAxis(axis.Keys, axis.ValuesList[0])
-	newAxis := baseAxis.Divide(strategy, target)
-	valuesListLen := len(axis.ValuesList)
-	newValuesList := make([][]uint64, valuesListLen)
-	newValuesList[0] = newAxis.Values
-	for i := 1; i < valuesListLen; i++ {
-		baseAxis.SetValues(axis.ValuesList[i])
-		newValuesList[i] = baseAxis.Reduce(newAxis.Keys).Values
-	}
-	return CreateStorageAxis(newAxis.Keys, newValuesList)
+	return CreateMemAxis(keysList, valuesList)
 }
 
-func Compact(times []time.Time, StorageAxes []MemAxis, strategy matrix.Strategy) MemAxis {
-	if len(StorageAxes) == 0 {
+func Compact(times []time.Time, memAxes []MemAxis, strategy matrix.Strategy) MemAxis {
+	if len(memAxes) == 0 {
 		return MemAxis{}
 	}
-	axes := make([]matrix.Axis, len(StorageAxes))
-	for i, axis := range StorageAxes {
-		axes[i] = matrix.CreateAxis(axis.Keys, axis.ValuesList[0])
-	}
-	plane := matrix.CreatePlane(times, axes)
-	compactAxis, helper := plane.Compact(strategy)
-	valuesListLen := len(StorageAxes[0].ValuesList)
+	valuesListLen := len(memAxes[0].ValuesList)
+	axes := make([]matrix.Axis, len(memAxes))
+	keysList := make([][]string, valuesListLen)
 	valuesList := make([][]uint64, valuesListLen)
-	valuesList[0] = compactAxis.Values
-	for j := 1; j < valuesListLen; j++ {
-		compactAxis.SetZeroValues()
-		for i, axis := range StorageAxes {
-			axes[i].SetValues(axis.ValuesList[j])
-			strategy.Split(compactAxis, axes[i], matrix.SplitAdd, i, helper)
+	for i := 0; i < valuesListLen; i++ {
+		for j, axis := range memAxes {
+			axes[j] = matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i])
 		}
-		valuesList[j] = compactAxis.Values
+		plane := matrix.CreatePlane(times, axes)
+		compactAxis, _ := plane.Compact(strategy)
+		keysList[i] = compactAxis.Keys
+		valuesList[i] = compactAxis.Values
 	}
-	return CreateStorageAxis(compactAxis.Keys, valuesList)
+	return CreateMemAxis(keysList, valuesList)
 }
