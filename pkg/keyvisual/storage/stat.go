@@ -78,7 +78,9 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
 		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		if s.BUM.IsOpen {
+			log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		}
 
 		s.StartTime = s.RingTimes[s.Head]
 		s.RingAxes[s.Head] = MemAxis{}
@@ -113,7 +115,9 @@ func (s *layerStat) Reduce() {
 			break
 		}
 		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
-		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		if s.BUM.IsOpen {
+			log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
+		}
 
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
@@ -139,7 +143,9 @@ func (s *layerStat) Append(axis MemAxis, endTime time.Time) {
 	}
 
 	err := s.BUM.InsertPlane(s.Num, endTime, axis)
-	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
+	if s.BUM.IsOpen {
+		log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
+	}
 
 	s.RingAxes[s.Tail] = axis
 	s.RingTimes[s.Tail] = endTime
@@ -212,18 +218,18 @@ type Stat struct {
 
 	strategy matrix.Strategy
 
-	provider *region.PDDataProvider
+	// provider *region.PDDataProvider
 
 	reportManage *ReportManage
-
 	backUpManage *BackUpManage
 	maxDowntime  time.Duration
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(lc fx.Lifecycle, provider *region.PDDataProvider, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, db *dbstore.DB) *Stat {
+func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, isOpenBackUp bool, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
-	bum := NewBackUpManage(db)
+	bum := NewBackUpManage(db, isOpenBackUp)
+
 	for i, c := range cfg.LayersConfig {
 		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, bum)
 		if i > 0 {
@@ -231,9 +237,9 @@ func NewStat(lc fx.Lifecycle, provider *region.PDDataProvider, cfg StatConfig, s
 		}
 	}
 	s := &Stat{
-		layers:       layers,
-		strategy:     strategy,
-		provider:     provider,
+		layers:   layers,
+		strategy: strategy,
+		//provider:     provider,
 		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
 		backUpManage: bum,
 		maxDowntime:  cfg.MaxDowntime,
@@ -345,12 +351,12 @@ func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, tag 
 	times, axes := s.rangeRoot(startTime, endTime)
 
 	if len(times) <= 1 {
-		return matrix.CreateEmptyPlane(startTime, endTime, startKey, endKey)
+		return matrix.CreateEmptyPlane(s.strategy, startTime, endTime, startKey, endKey)
 	}
 
 	matrixAxes := make([]matrix.Axis, len(axes))
 	for i, axis := range axes {
-		matrixAxis := axis.Range(startKey, endKey, tag)
+		matrixAxis := axis.Range(s.strategy, startKey, endKey, tag)
 		matrixAxes[i] = matrixAxis
 	}
 	return matrix.CreatePlane(times, matrixAxes)

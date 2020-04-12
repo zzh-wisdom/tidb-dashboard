@@ -36,3 +36,21 @@ func NewStatInput(provider *region.PDDataProvider) StatInput {
 	endTime := time.Unix(provider.FileEndTime, 0)
 	return FileInput(startTime, endTime)
 }
+
+type StatInputMode int
+
+const (
+	PeriodicInputMode StatInputMode = 0
+	FileInputMode     StatInputMode = 1
+)
+
+func (s StatInputMode) String() string {
+	switch s {
+	case PeriodicInputMode:
+		return "PeriodicInputMode"
+	case FileInputMode:
+		return "FileInputMode"
+	default:
+		panic("unreachable")
+	}
+}

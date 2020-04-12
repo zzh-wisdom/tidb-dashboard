@@ -82,12 +82,15 @@ func newKeyCount(key string) *keyCount {
 type BackUpManage struct {
 	Db *dbstore.DB
 	sync.Map
+
+	IsOpen bool
 }
 
-func NewBackUpManage(db *dbstore.DB) *BackUpManage {
+func NewBackUpManage(db *dbstore.DB, isOpen bool) *BackUpManage {
 	return &BackUpManage{
-		Db:  db,
-		Map: sync.Map{},
+		Db:     db,
+		Map:    sync.Map{},
+		IsOpen: isOpen,
 	}
 }
 
@@ -95,6 +98,9 @@ func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis MemAxis) erro
 	err := b.SaveKeys(axis.KeysList)
 	if err != nil {
 		return err
+	}
+	if !b.IsOpen {
+		return nil
 	}
 
 	newAxis := Axis{
@@ -138,6 +144,9 @@ func (b *BackUpManage) SaveKeys(keysList [][]string) error {
 }
 
 func (b *BackUpManage) storeKey(key string) error {
+	if !b.IsOpen {
+		return nil
+	}
 	id := getKeyID(key)
 	return b.Db.Create(&KeyIntern{ID: id, Key: key}).Error
 }
@@ -146,6 +155,9 @@ func (b *BackUpManage) DeletePlane(num uint8, time time.Time, axis MemAxis) erro
 	err := b.DeletKeys(axis.KeysList)
 	if err != nil {
 		return err
+	}
+	if !b.IsOpen {
+		return nil
 	}
 	return b.Db.
 		Where("layer_num = ? AND time = ?", num, time).
@@ -175,6 +187,9 @@ func (b *BackUpManage) DeletKeys(keysList [][]string) error {
 }
 
 func (b *BackUpManage) eraseKey(keys []string) error {
+	if !b.IsOpen {
+		return nil
+	}
 	IDs := make([]uint64, len(keys))
 	for i, key := range keys {
 		IDs[i] = getKeyID(key)
@@ -184,6 +199,9 @@ func (b *BackUpManage) eraseKey(keys []string) error {
 
 // Restore restore all data from db
 func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
+	if !b.IsOpen {
+		return
+	}
 	layerCount := len(stat.layers)
 	// establish start `Plane` for each layer
 	createStartPlanes := func() {
@@ -302,6 +320,9 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 }
 
 func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err error) {
+	if !b.IsOpen {
+		return nil, nil
+	}
 	var keyInterns []KeyIntern
 	err = b.Db.Find(&keyInterns).Error
 	if err != nil {
@@ -327,6 +348,9 @@ func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err erro
 }
 
 func (b *BackUpManage) findPlaneOrderByTime(num uint8) ([]Plane, error) {
+	if !b.IsOpen {
+		return nil, nil
+	}
 	var planes []Plane
 	err := b.Db.
 		Where("layer_num = ?", num).

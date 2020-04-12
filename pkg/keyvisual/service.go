@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	heatmapsMaxDisplayY = 1536
+	heatmapsMaxDisplayY = 200 //1536
 
 	distanceStrategyRatio = 1.0 / math.Phi
 	distanceStrategyLevel = 15
@@ -269,12 +269,17 @@ func newWaitGroup(lc fx.Lifecycle) *sync.WaitGroup {
 	return wg
 }
 
-func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, labelStrategy decorator.LabelStrategy) matrix.Strategy {
-	return matrix.DistanceStrategy(lc, wg, labelStrategy, distanceStrategyRatio, distanceStrategyLevel, distanceStrategyCount)
+func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, labelStrategy decorator.LabelStrategy) matrix.Strategy {
+	config := matrix.NewStrategyConfig(matrix.StrategyMode(cfg.MatrixStrategyMode), distanceStrategyRatio, distanceStrategyLevel, distanceStrategyCount)
+	log.Info("matrix strategy mode", zap.String("Mode", matrix.StrategyMode(cfg.MatrixStrategyMode).String()))
+	return matrix.NewStrategy(lc, wg, config, labelStrategy)
 }
 
-func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
-	stat := storage.NewStat(lc, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
+func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
+	statInputMode := input.StatInputMode(cfg.StatInputMode)
+	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
+	isOpenBackUp := statInputMode == input.PeriodicInputMode
+	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isOpenBackUp, db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

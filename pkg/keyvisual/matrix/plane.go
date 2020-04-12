@@ -37,8 +37,8 @@ func CreatePlane(times []time.Time, axes []Axis) Plane {
 }
 
 // CreateEmptyPlane constructs a minimal empty Plane with the given parameters.
-func CreateEmptyPlane(startTime, endTime time.Time, startKey, endKey string) Plane {
-	return CreatePlane([]time.Time{startTime, endTime}, []Axis{CreateEmptyAxis(startKey, endKey)})
+func CreateEmptyPlane(strategy Strategy, startTime, endTime time.Time, startKey, endKey string) Plane {
+	return CreatePlane([]time.Time{startTime, endTime}, []Axis{CreateEmptyAxis(startKey, endKey, strategy.GetAxisStrategy())})
 }
 
 // Compact compacts Plane into an axis.
@@ -65,7 +65,7 @@ func (plane *Plane) Compact(strategy Strategy) (Axis, interface{}) {
 	} else {
 		compactKeys = MakeKeys(keySet)
 	}
-	compactAxis := CreateZeroAxis(compactKeys)
+	compactAxis := CreateZeroAxis(compactKeys, strategy.GetAxisStrategy())
 
 	helper := strategy.GenerateHelper(plane.Axes, compactAxis.Keys)
 	for i, c := range plane.Axes {
@@ -82,7 +82,7 @@ func (plane *Plane) Pixel(strategy Strategy, target int, displayTag string) Matr
 
 	axesLen := len(plane.Axes)
 	data := make([][]uint64, axesLen)
-	goCompactAxis := CreateZeroAxis(compactAxis.Keys)
+	goCompactAxis := CreateZeroAxis(compactAxis.Keys, strategy.GetAxisStrategy())
 	for i, axis := range plane.Axes {
 		goCompactAxis.Clear()
 		strategy.Split(goCompactAxis, axis, SplitTo, i, helper)

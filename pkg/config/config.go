@@ -21,6 +21,9 @@ type Config struct {
 	DataDir    string
 	PDEndPoint string
 
+	StatInputMode      int
+	MatrixStrategyMode int
+
 	// TLS config for mTLS authentication between TiDB components.
 	ClusterTLSConfig *tls.Config
 
