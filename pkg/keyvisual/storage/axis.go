@@ -14,20 +14,21 @@
 package storage
 
 import (
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 	"time"
+
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 )
 
 // Axis stores consecutive buckets. Each bucket has StartKey, EndKey, and some statistics. The EndKey of each bucket is
 // the StartKey of its next bucket. The actual data structure is stored in columns. Therefore satisfies:
 // len(Keys) == len(ValuesList[i]) + 1. In particular, ValuesList[0] is the base column.
-type Axis struct {
+type MemAxis struct {
 	Keys       []string
 	ValuesList [][]uint64
 }
 
 // CreateAxis checks the given parameters and uses them to build the Axis.
-func CreateStorageAxis(keys []string, valuesList [][]uint64) Axis {
+func CreateStorageAxis(keys []string, valuesList [][]uint64) MemAxis {
 	keysLen := len(keys)
 	if keysLen <= 1 {
 		panic("Keys length must be greater than 1")
@@ -40,14 +41,14 @@ func CreateStorageAxis(keys []string, valuesList [][]uint64) Axis {
 			panic("Keys length must be equal to Values length + 1")
 		}
 	}
-	return Axis{
+	return MemAxis{
 		Keys:       keys,
 		ValuesList: valuesList,
 	}
 }
 
 // CreateEmptyAxis constructs a minimal empty Axis with the given parameters.
-func CreateEmptyStorageAxis(startKey, endKey string, valuesListLen int) Axis {
+func CreateEmptyStorageAxis(startKey, endKey string, valuesListLen int) MemAxis {
 	keys := []string{startKey, endKey}
 	values := []uint64{0}
 	valuesList := make([][]uint64, valuesListLen)
@@ -58,7 +59,7 @@ func CreateEmptyStorageAxis(startKey, endKey string, valuesListLen int) Axis {
 }
 
 // Shrink reduces all statistical values.
-func (axis *Axis) Shrink(ratio uint64) {
+func (axis *MemAxis) Shrink(ratio uint64) {
 	for _, values := range axis.ValuesList {
 		for i := range values {
 			values[i] /= ratio
@@ -67,7 +68,7 @@ func (axis *Axis) Shrink(ratio uint64) {
 }
 
 // Range returns a sub Axis with specified range.
-func (axis *Axis) Range(startKey string, endKey string) Axis {
+func (axis *MemAxis) Range(startKey string, endKey string) MemAxis {
 	start, end, ok := matrix.KeysRange(axis.Keys, startKey, endKey)
 	if !ok {
 		return CreateEmptyStorageAxis(startKey, endKey, len(axis.ValuesList))
@@ -82,7 +83,7 @@ func (axis *Axis) Range(startKey string, endKey string) Axis {
 
 // Focus uses the base column as the chunk for the Focus operation to obtain the partitioning scheme, and uses this to
 // reduce other columns.
-func (axis *Axis) Focus(strategy matrix.Strategy, threshold uint64, ratio int, target int) Axis {
+func (axis *MemAxis) Focus(strategy matrix.Strategy, threshold uint64, ratio int, target int) MemAxis {
 	if target >= len(axis.Keys)-1 {
 		return *axis
 	}
@@ -101,7 +102,7 @@ func (axis *Axis) Focus(strategy matrix.Strategy, threshold uint64, ratio int, t
 
 // Divide uses the base column as the chunk for the Divide operation to obtain the partitioning scheme, and uses this to
 // reduce other columns.
-func (axis *Axis) Divide(strategy matrix.Strategy, target int) Axis {
+func (axis *MemAxis) Divide(strategy matrix.Strategy, target int) MemAxis {
 	if target >= len(axis.Keys)-1 {
 		return *axis
 	}
@@ -118,9 +119,9 @@ func (axis *Axis) Divide(strategy matrix.Strategy, target int) Axis {
 	return CreateStorageAxis(newAxis.Keys, newValuesList)
 }
 
-func Compact(times []time.Time, StorageAxes []Axis, strategy matrix.Strategy) Axis {
+func Compact(times []time.Time, StorageAxes []MemAxis, strategy matrix.Strategy) MemAxis {
 	if len(StorageAxes) == 0 {
-		return Axis{}
+		return MemAxis{}
 	}
 	axes := make([]matrix.Axis, len(StorageAxes))
 	for i, axis := range StorageAxes {

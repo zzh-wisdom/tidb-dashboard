@@ -37,7 +37,7 @@ type LayerConfig struct {
 type layerStat struct {
 	StartTime time.Time
 	EndTime   time.Time
-	RingAxes  []Axis
+	RingAxes  []MemAxis
 	RingTimes []time.Time
 
 	Head  int
@@ -54,7 +54,7 @@ func newLayerStat(conf LayerConfig, strategy matrix.Strategy, startTime time.Tim
 	return &layerStat{
 		StartTime: startTime,
 		EndTime:   startTime,
-		RingAxes:  make([]Axis, conf.Len),
+		RingAxes:  make([]MemAxis, conf.Len),
 		RingTimes: make([]time.Time, conf.Len),
 		Head:      0,
 		Tail:      0,
@@ -70,20 +70,20 @@ func newLayerStat(conf LayerConfig, strategy matrix.Strategy, startTime time.Tim
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
 		s.StartTime = s.RingTimes[s.Head]
-		s.RingAxes[s.Head] = Axis{}
+		s.RingAxes[s.Head] = MemAxis{}
 		s.Head = (s.Head + 1) % s.Len
 		return
 	}
 
 	times := make([]time.Time, 0, s.Ratio+1)
 	times = append(times, s.StartTime)
-	axes := make([]Axis, 0, s.Ratio)
+	axes := make([]MemAxis, 0, s.Ratio)
 
 	for i := 0; i < s.Ratio; i++ {
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
 		axes = append(axes, s.RingAxes[s.Head])
-		s.RingAxes[s.Head] = Axis{}
+		s.RingAxes[s.Head] = MemAxis{}
 		s.Head = (s.Head + 1) % s.Len
 	}
 
@@ -95,7 +95,7 @@ func (s *layerStat) Reduce() {
 }
 
 // Append appends a key axis to layerStat.
-func (s *layerStat) Append(axis Axis, endTime time.Time) {
+func (s *layerStat) Append(axis MemAxis, endTime time.Time) {
 	if s.Head == s.Tail && !s.Empty {
 		s.Reduce()
 	}
@@ -107,7 +107,7 @@ func (s *layerStat) Append(axis Axis, endTime time.Time) {
 }
 
 // Range gets the specify plane in the time range.
-func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes []Axis) {
+func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes []MemAxis) {
 	if s.Next != nil {
 		times, axes = s.Next.Range(startTime, endTime)
 	}
@@ -247,7 +247,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	s.layers[0].Append(axis, endTime)
 }
 
-func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []Axis) {
+func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []MemAxis) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.layers[0].Range(startTime, endTime)
