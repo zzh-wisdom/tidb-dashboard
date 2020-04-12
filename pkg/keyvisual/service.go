@@ -65,7 +65,7 @@ var (
 			ReportMaxDisplayY: 1536,
 			MaxReportNum:      5 * 7 * 24 * 60 / 10, // 5 weeks
 		},
-		MaxDowntime: time.Minute,
+		MaxDowntime: time.Second,
 	}
 )
 

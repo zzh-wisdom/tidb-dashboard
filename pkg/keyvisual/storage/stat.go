@@ -127,10 +127,9 @@ func (s *layerStat) Reduce() {
 	}
 
 	compactAxis := Compact(times, axes, s.Strategy)
-	compactAxis = RichStorageAxis(compactAxis)
-	newStorageAxis := ConciseStorageAxis(compactAxis, s.Strategy)
-	newStorageAxis.Shrink(uint64(s.Ratio))
-	s.Next.Append(newStorageAxis, s.StartTime)
+	newAxis := compactAxis.Divide(s.Strategy, preTarget)
+	newAxis.Shrink(uint64(s.Ratio))
+	s.Next.Append(newAxis, s.StartTime)
 }
 
 // Append appends a key axis to layerStat.
@@ -259,7 +258,7 @@ func (s *Stat) Restore(startTime time.Time) {
 
 	if !startTime.Before(s.getLastestEndTime().Add(s.maxDowntime)) {
 		log.Debug("New Segmentation Axis", zap.Time("EndTime", startTime))
-		sepAxis := CreateSepMemAxis(len(region.StorageTags))
+		sepAxis := CreateSepMemAxis(len(region.Tags))
 		s.layers[0].Append(sepAxis, startTime)
 	}
 
@@ -304,6 +303,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	if regions.Len() == 0 {
 		return
 	}
+
 	axis := CreateStorageAxisFromRegions(regions, s.strategy)
 
 	s.mutex.Lock()
@@ -338,7 +338,7 @@ func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []MemAxis) 
 }
 
 // Range returns a sub Plane with specified range.
-func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, respTag region.StatTag) matrix.Plane {
+func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, tag region.StatTag) matrix.Plane {
 	s.backUpManage.InternKey(&startKey)
 	s.backUpManage.InternKey(&endKey)
 
@@ -350,8 +350,7 @@ func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, resp
 
 	matrixAxes := make([]matrix.Axis, len(axes))
 	for i, axis := range axes {
-		axis = axis.Range(startKey, endKey)
-		matrixAxis := IntoMatrixAxis(axis, respTag)
+		matrixAxis := axis.Range(startKey, endKey, tag)
 		matrixAxes[i] = matrixAxis
 	}
 	return matrix.CreatePlane(times, matrixAxes)

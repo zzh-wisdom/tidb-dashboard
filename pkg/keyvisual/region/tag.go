@@ -66,16 +66,12 @@ func (tag StatTag) String() string {
 	}
 }
 
-// StorageTags is the order of tags during storage.
-var StorageTags = []StatTag{WrittenBytes, ReadBytes, WrittenKeys, ReadKeys}
-
-// ResponseTags is the order of tags when responding.
-var ResponseTags = append([]StatTag{Integration}, StorageTags...)
+var Tags = []StatTag{Integration, WrittenBytes, ReadBytes, WrittenKeys, ReadKeys}
 
 // GetDisplayTags returns the actual order of the ResponseTags under the specified baseTag.
 func GetDisplayTags(baseTag StatTag) []string {
-	displayTags := make([]string, len(ResponseTags))
-	for i, tag := range ResponseTags {
+	displayTags := make([]string, len(Tags))
+	for i, tag := range Tags {
 		displayTags[i] = tag.String()
 		if tag == baseTag {
 			displayTags[0], displayTags[i] = displayTags[i], displayTags[0]

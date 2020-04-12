@@ -30,7 +30,7 @@ func (KeyIntern) TableName() string {
 }
 
 type Axis struct {
-	Keys       []uint64
+	KeysList   [][]uint64
 	ValuesList [][]uint64
 	IsSep      bool
 }
@@ -92,18 +92,22 @@ func NewBackUpManage(db *dbstore.DB) *BackUpManage {
 }
 
 func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis MemAxis) error {
-	err := b.SaveKeys(axis.Keys)
+	err := b.SaveKeys(axis.KeysList)
 	if err != nil {
 		return err
 	}
 
 	newAxis := Axis{
-		Keys:       make([]uint64, len(axis.Keys)),
+		KeysList:   make([][]uint64, len(axis.KeysList)),
 		ValuesList: axis.ValuesList,
 		IsSep:      axis.IsSep,
 	}
-	for i, key := range axis.Keys {
-		newAxis.Keys[i] = getKeyID(key)
+	for i, keys := range axis.KeysList {
+		ids := make([]uint64, len(keys))
+		for j, key := range keys {
+			ids[j] = getKeyID(key)
+		}
+		newAxis.KeysList[i] = ids
 	}
 	plane, err := NewPlane(num, time, newAxis)
 	if err != nil {
@@ -114,17 +118,19 @@ func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis MemAxis) erro
 
 // SaveKeys interns all strings. and
 // save the string, not exist in sync.Map, into db.
-func (b *BackUpManage) SaveKeys(keys []string) error {
-	for i := range keys {
-		kc := newKeyCount(keys[i])
-		pKeyCount, ok := b.LoadOrStore(keys[i], kc)
-		if ok {
-			pKeyCount.(*keyCount).Count++
-			keys[i] = pKeyCount.(*keyCount).Key
-		} else {
-			err := b.storeKey(keys[i])
-			if err != nil {
-				return err
+func (b *BackUpManage) SaveKeys(keysList [][]string) error {
+	for _, keys := range keysList {
+		for i := range keys {
+			kc := newKeyCount(keys[i])
+			pKeyCount, ok := b.LoadOrStore(keys[i], kc)
+			if ok {
+				pKeyCount.(*keyCount).Count++
+				keys[i] = pKeyCount.(*keyCount).Key
+			} else {
+				err := b.storeKey(keys[i])
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -137,7 +143,7 @@ func (b *BackUpManage) storeKey(key string) error {
 }
 
 func (b *BackUpManage) DeletePlane(num uint8, time time.Time, axis MemAxis) error {
-	err := b.DeletKeys(axis.Keys)
+	err := b.DeletKeys(axis.KeysList)
 	if err != nil {
 		return err
 	}
@@ -150,17 +156,19 @@ func (b *BackUpManage) DeletePlane(num uint8, time time.Time, axis MemAxis) erro
 // DeletKeys check the count of every key firstly,
 // if count = 1, delete it from sync.Map and db,
 // or modify count = count - 1
-func (b *BackUpManage) DeletKeys(keys []string) error {
+func (b *BackUpManage) DeletKeys(keysList [][]string) error {
 	var dKeys []string
-	for _, key := range keys {
-		pKeyCount, ok := b.Load(key)
-		if !ok {
-			panic("unreachable")
-		}
-		if pKeyCount.(*keyCount).Count > 1 {
-			pKeyCount.(*keyCount).Count--
-		} else {
-			dKeys = append(dKeys, key)
+	for _, keys := range keysList {
+		for _, key := range keys {
+			pKeyCount, ok := b.Load(key)
+			if !ok {
+				panic("unreachable")
+			}
+			if pKeyCount.(*keyCount).Count > 1 {
+				pKeyCount.(*keyCount).Count--
+			} else {
+				dKeys = append(dKeys, key)
+			}
 		}
 	}
 	return b.eraseKey(dKeys)
@@ -243,7 +251,7 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 		stat.layers[num].Tail = (stat.layers[num].Head + n) % stat.layers[num].Len
 
 		times := []time.Time{planes[0].Time}
-		axes := []MemAxis{MemAxis{}}
+		axes := []MemAxis{{}}
 		tempTimes := make([]time.Time, len(planes)-1)
 		tempAxes := make([]MemAxis, len(planes)-1)
 		for i, plane := range planes[1:] {
@@ -254,10 +262,13 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 			}
 			log.Debug("unmarshalAxis", zap.Int("len", len(axis.ValuesList)))
 			tempAxes[i].ValuesList = axis.ValuesList
-			tempAxes[i].Keys = make([]string, len(axis.Keys))
+			tempAxes[i].KeysList = make([][]string, len(axis.KeysList))
 			tempAxes[i].IsSep = axis.IsSep
-			for j := range axis.Keys {
-				tempAxes[i].Keys[j] = IDKeyMap[axis.Keys[j]]
+			for j := range axis.KeysList {
+				tempAxes[i].KeysList[j] = make([]string, len(axis.KeysList[j]))
+				for k := range axis.KeysList[j] {
+					tempAxes[i].KeysList[j][k] = IDKeyMap[axis.KeysList[j][k]]
+				}
 			}
 
 			stat.layers[num].RingTimes[i] = plane.Time
