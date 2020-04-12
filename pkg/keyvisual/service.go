@@ -60,11 +60,12 @@ var (
 			{Len: 24 / 4 * 28, Ratio: 0},                // step 4 hours, total 168, 4 weeks (sum: 5 weeks)
 		},
 		ReportConfig: storage.ReportConfig{
-			ReportInterval:    time.Second * 10,
-			ReportTimeRange:   time.Second * 10,
+			ReportInterval:    time.Minute * 10,
+			ReportTimeRange:   time.Minute * 10,
 			ReportMaxDisplayY: 1536,
-			MaxReportNum:      2, // 5 weeks
+			MaxReportNum:      5 * 7 * 24 * 60 / 10, // 5 weeks
 		},
+		MaxDowntime: time.Minute,
 	}
 )
 
@@ -272,7 +273,7 @@ func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, labelStrategy decorator.La
 }
 
 func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
-	stat := storage.NewStat(lc, wg, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
+	stat := storage.NewStat(lc, provider, defaultStatConfig, strategy, in.GetStartTime(), db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
