@@ -228,6 +228,7 @@ func (s *Service) heatmaps(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, "bad request")
 		return
 	}
+
 	baseTag := region.IntoTag(typ)
 
 	// report test
@@ -243,12 +244,12 @@ func (s *Service) heatmaps(c *gin.Context) {
 	}
 
 	plane := s.stat.Range(startTime, endTime, startKey, endKey, baseTag)
-	resp := plane.Pixel(s.strategy, heatmapsMaxDisplayY, region.GetDisplayTags(baseTag))
+	resp := plane.Pixel(s.strategy, heatmapsMaxDisplayY, baseTag.String())
 	resp.RangeKey(startKey, endKey)
 	// TODO: An expedient to reduce data transmission, which needs to be deleted later.
-	resp.DataMap = map[string][][]uint64{
-		typ: resp.DataMap[typ],
-	}
+	//resp.DataMap = map[string][][]uint64{
+	//	typ: resp.DataMap[typ],
+	//}
 	// ----------
 	c.JSON(http.StatusOK, resp)
 }

@@ -31,7 +31,7 @@ const (
 )
 
 // CreateStorageAxis converts the RegionsInfo to a StorageAxis.
-func CreateStorageAxis(regions region.RegionsInfo, strategy matrix.Strategy) matrix.Axis {
+func CreateStorageAxisFromRegions(regions region.RegionsInfo, strategy matrix.Strategy) MemAxis {
 	regionsLen := regions.Len()
 	if regionsLen <= 0 {
 		panic("At least one RegionInfo")
@@ -43,26 +43,24 @@ func CreateStorageAxis(regions region.RegionsInfo, strategy matrix.Strategy) mat
 		valuesList[i] = regions.GetValues(tag)
 	}
 
-	preAxis := matrix.CreateAxis(keys, valuesList)
+	preAxis := CreateMemAxis(keys, valuesList)
 	wash(&preAxis)
 
-	axis := IntoStorageAxis(preAxis, strategy)
+	axis := ConciseStorageAxis(preAxis, strategy)
 	log.Debug("New StorageAxis", zap.Int("region length", regionsLen), zap.Int("focus keys length", len(axis.Keys)))
 	return axis
 }
 
-// IntoStorageAxis converts ResponseAxis to StorageAxis.
-func IntoStorageAxis(responseAxis matrix.Axis, strategy matrix.Strategy) matrix.Axis {
-	// axis := preAxis.Focus(strategy, preThreshold, len(keys)/preRatioTarget, preTarget)
-	axis := responseAxis.Divide(strategy, preTarget)
-	var storageValuesList [][]uint64
-	storageValuesList = append(storageValuesList, axis.ValuesList[1:]...)
-	return matrix.CreateAxis(axis.Keys, storageValuesList)
+// ConciseStorageAxis divide storageAxis remove storageAxis.ValuesList[0] whose tag is Integration
+func ConciseStorageAxis(axis MemAxis, strategy matrix.Strategy) MemAxis {
+	newAxis := axis.Divide(strategy, preTarget)
+	var ValuesList [][]uint64
+	ValuesList = append(ValuesList, newAxis.ValuesList[1:]...)
+	return CreateMemAxis(newAxis.Keys, ValuesList)
 }
 
-// IntoResponseAxis converts StorageAxis to ResponseAxis.
-func IntoResponseAxis(storageAxis matrix.Axis, baseTag region.StatTag) matrix.Axis {
-	// add integration values
+// RichStorageAxis add integration values at storageAxis.ValuesList[0]
+func RichStorageAxis(storageAxis MemAxis) MemAxis {
 	valuesList := make([][]uint64, 1, len(region.ResponseTags))
 	writtenBytes := storageAxis.ValuesList[0]
 	readBytes := storageAxis.ValuesList[1]
@@ -72,19 +70,23 @@ func IntoResponseAxis(storageAxis matrix.Axis, baseTag region.StatTag) matrix.Ax
 	}
 	valuesList[0] = integration
 	valuesList = append(valuesList, storageAxis.ValuesList...)
-	// swap baseTag
+	return CreateMemAxis(storageAxis.Keys, valuesList)
+}
+
+// IntoMatrixAxis converts StorageAxis to Matrix Axis with the given respTag.
+func IntoMatrixAxis(storageAxis MemAxis, respTag region.StatTag) matrix.Axis {
+	richStorageAxis := RichStorageAxis(storageAxis)
 	for i, tag := range region.ResponseTags {
-		if tag == baseTag {
-			valuesList[0], valuesList[i] = valuesList[i], valuesList[0]
-			return matrix.CreateAxis(storageAxis.Keys, valuesList)
+		if tag == respTag {
+			return matrix.CreateAxis(storageAxis.Keys, richStorageAxis.ValuesList[i])
 		}
 	}
 	panic("unreachable")
 }
 
 // TODO: Temporary solution, need to trace the source of dirty data.
-func wash(axis *matrix.Axis) {
-	for i, value := range axis.ValuesList[1] {
+func wash(axis *MemAxis) {
+	for i, value := range axis.ValuesList[0] {
 		if value >= dirtyWrittenBytes {
 			for j := range region.ResponseTags {
 				axis.ValuesList[j][i] = 0

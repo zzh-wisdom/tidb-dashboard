@@ -56,11 +56,11 @@ func BenchmarkGenerateScale(b *testing.B) {
 	perr(err)
 
 	n := 300
-	chunks := make([]chunk, n)
+	axes := make([]Axis, n)
 	disOrig := make([][]int, n)
 	dis := make([][]int, n)
-	for i := range chunks {
-		chunks[i] = createZeroChunk(data.Keys)
+	for i := range axes {
+		axes[i] = CreateZeroAxis(data.Keys)
 		disOrig[i] = make([]int, len(data.Dis))
 	}
 	rollbackDis := func() {
@@ -94,7 +94,7 @@ func BenchmarkGenerateScale(b *testing.B) {
 		b.StopTimer()
 		rollbackDis()
 		b.StartTimer()
-		_ = strategy.GenerateScale(chunks, compactKeys, dis)
+		_ = strategy.GenerateScale(axes, compactKeys, dis)
 	}
 	b.StopTimer()
 	_ = app.Stop(context.Background())

@@ -14,194 +14,102 @@
 package matrix
 
 // Axis stores consecutive buckets. Each bucket has StartKey, EndKey, and some statistics. The EndKey of each bucket is
-// the StartKey of its next bucket. The actual data structure is stored in columns. Therefore satisfies:
-// len(Keys) == len(ValuesList[i]) + 1. In particular, ValuesList[0] is the base column.
+// the StartKey of its next bucket. Therefore satisfies:
+// len(Keys) == len(ValuesList) + 1.
 type Axis struct {
-	Keys       []string
-	ValuesList [][]uint64
-
-	IsSep bool
+	Keys   []string
+	Values []uint64
 }
 
 // CreateAxis checks the given parameters and uses them to build the Axis.
-func CreateAxis(keys []string, valuesList [][]uint64) Axis {
+func CreateAxis(keys []string, values []uint64) Axis {
 	keysLen := len(keys)
 	if keysLen <= 1 {
 		panic("Keys length must be greater than 1")
 	}
-	if len(valuesList) == 0 {
-		panic("ValuesList length must be greater than 0")
+	if len(values) == 0 {
+		panic("Values length must be greater than 0")
 	}
-	for _, values := range valuesList {
-		if keysLen != len(values)+1 {
-			panic("Keys length must be equal to Values length + 1")
-		}
+	if keysLen != len(values)+1 {
+		panic("Keys length must be equal to Values length + 1")
 	}
 	return Axis{
-		Keys:       keys,
-		ValuesList: valuesList,
+		Keys:   keys,
+		Values: values,
 	}
 }
 
 // CreateEmptyAxis constructs a minimal empty Axis with the given parameters.
-func CreateEmptyAxis(startKey, endKey string, valuesListLen int) Axis {
+func CreateEmptyAxis(startKey, endKey string) Axis {
 	keys := []string{startKey, endKey}
 	values := []uint64{0}
-	valuesList := make([][]uint64, valuesListLen)
-	for i := range valuesList {
-		valuesList[i] = values
-	}
-	return CreateAxis(keys, valuesList)
+	return CreateAxis(keys, values)
 }
 
-// CreateEmptyAxis constructs a segmentation Axis
-func CreateSepAxis(valuesListLen int) Axis {
-	keys := []string{"", ""}
-	values := []uint64{0}
-	valuesList := make([][]uint64, valuesListLen)
-	for i := range valuesList {
-		valuesList[i] = values
+// CreateZeroAxis constructs zero values Axis with the given keys
+func CreateZeroAxis(keys []string) Axis {
+	keysLen := len(keys)
+	if keysLen <= 1 {
+		panic("Keys length must be greater than 1")
 	}
-	return Axis{
-		Keys:       keys,
-		ValuesList: valuesList,
-		IsSep:      true,
-	}
+	return CreateAxis(keys, make([]uint64, keysLen-1))
 }
 
-// Shrink reduces all statistical values.
-func (axis *Axis) Shrink(ratio uint64) {
-	for _, values := range axis.ValuesList {
-		for i := range values {
-			values[i] /= ratio
-		}
+// SetValues set axis.Values to values
+func (axis *Axis) SetValues(values []uint64) {
+	if len(values)+1 != len(axis.Keys) {
+		panic("Keys length must be equal to Values length + 1")
 	}
+	axis.Values = values
+}
+
+// SetZeroValues set all values of axis.Values to 0
+func (axis *Axis) SetZeroValues() {
+	newValues := make([]uint64, len(axis.Values))
+	axis.SetValues(newValues)
+}
+
+// Set all values to 0
+func (axis *Axis) Clear() {
+	MemsetUint64(axis.Values, 0)
 }
 
 // Range returns a sub Axis with specified range.
 func (axis *Axis) Range(startKey string, endKey string) Axis {
 	start, end, ok := KeysRange(axis.Keys, startKey, endKey)
 	if !ok {
-		return CreateEmptyAxis(startKey, endKey, len(axis.ValuesList))
+		return CreateEmptyAxis(startKey, endKey)
 	}
 	keys := axis.Keys[start:end]
-	valuesList := make([][]uint64, len(axis.ValuesList))
-	for i := range valuesList {
-		valuesList[i] = axis.ValuesList[i][start : end-1]
-	}
-	return CreateAxis(keys, valuesList)
+	values := axis.Values[start : end-1]
+	return CreateAxis(keys, values)
 }
-
-// Focus uses the base column as the chunk for the Focus operation to obtain the partitioning scheme, and uses this to
-// reduce other columns.
-func (axis *Axis) Focus(strategy Strategy, threshold uint64, ratio int, target int) Axis {
-	if target >= len(axis.Keys)-1 {
-		return *axis
-	}
-
-	baseChunk := createChunk(axis.Keys, axis.ValuesList[0])
-	newChunk := baseChunk.Focus(strategy, threshold, ratio, target)
-	valuesListLen := len(axis.ValuesList)
-	newValuesList := make([][]uint64, valuesListLen)
-	newValuesList[0] = newChunk.Values
-	for i := 1; i < valuesListLen; i++ {
-		baseChunk.SetValues(axis.ValuesList[i])
-		newValuesList[i] = baseChunk.Reduce(newChunk.Keys).Values
-	}
-	return CreateAxis(newChunk.Keys, newValuesList)
-}
-
-// Divide uses the base column as the chunk for the Divide operation to obtain the partitioning scheme, and uses this to
-// reduce other columns.
-func (axis *Axis) Divide(strategy Strategy, target int) Axis {
-	if target >= len(axis.Keys)-1 {
-		return *axis
-	}
-
-	baseChunk := createChunk(axis.Keys, axis.ValuesList[0])
-	newChunk := baseChunk.Divide(strategy, target)
-	valuesListLen := len(axis.ValuesList)
-	newValuesList := make([][]uint64, valuesListLen)
-	newValuesList[0] = newChunk.Values
-	for i := 1; i < valuesListLen; i++ {
-		baseChunk.SetValues(axis.ValuesList[i])
-		newValuesList[i] = baseChunk.Reduce(newChunk.Keys).Values
-	}
-	return CreateAxis(newChunk.Keys, newValuesList)
-}
-
-type chunk struct {
-	// Keys and ValuesList[i] from Axis
-	Keys   []string
-	Values []uint64
-}
-
-func createChunk(keys []string, values []uint64) chunk {
-	keysLen := len(keys)
-	if keysLen <= 1 {
-		panic("Keys length must be greater than 1")
-	}
-	if keysLen != len(values)+1 {
-		panic("Keys length must be equal to Values length + 1")
-	}
-	return chunk{
-		Keys:   keys,
-		Values: values,
-	}
-}
-
-func createZeroChunk(keys []string) chunk {
-	keysLen := len(keys)
-	if keysLen <= 1 {
-		panic("Keys length must be greater than 1")
-	}
-	return createChunk(keys, make([]uint64, keysLen-1))
-}
-
-func (c *chunk) SetValues(values []uint64) {
-	if len(values)+1 != len(c.Keys) {
-		panic("Keys length must be equal to Values length + 1")
-	}
-	c.Values = values
-}
-
-func (c *chunk) SetZeroValues() {
-	newValues := make([]uint64, len(c.Values))
-	c.SetValues(newValues)
-}
-
-// Set all values to 0
-func (c *chunk) Clear() {
-	MemsetUint64(c.Values, 0)
-}
-
-// Calculation
 
 // Reduce generates new chunks based on the more sparse newKeys
-func (c *chunk) Reduce(newKeys []string) chunk {
-	keys := c.Keys
+func (axis *Axis) Reduce(newKeys []string) Axis {
+	keys := axis.Keys
 	CheckReduceOf(keys, newKeys)
 
 	newValues := make([]uint64, len(newKeys)-1)
 
 	if len(keys) == len(newKeys) {
-		copy(newValues, c.Values)
-		return createChunk(newKeys, newValues)
+		copy(newValues, axis.Values)
+		return CreateAxis(newKeys, newValues)
 	}
 
 	endKeys := newKeys[1:]
 	j := 0
-	for i, value := range c.Values {
+	for i, value := range axis.Values {
 		if equal(keys[i], endKeys[j]) {
 			j++
 		}
 		newValues[j] += value
 	}
-	return createChunk(newKeys, newValues)
+	return CreateAxis(newKeys, newValues)
 }
 
 // GetFocusRows estimates the number of rows generated by executing a Focus with a specified threshold
-func (c *chunk) GetFocusRows(threshold uint64) (count int) {
+func (axis *Axis) GetFocusRows(threshold uint64) (count int) {
 	start := 0
 	var bucketSum uint64 = 0
 	generateBucket := func(end int) {
@@ -212,13 +120,13 @@ func (c *chunk) GetFocusRows(threshold uint64) (count int) {
 		}
 	}
 
-	for i, value := range c.Values {
+	for i, value := range axis.Values {
 		if value >= threshold || bucketSum >= threshold {
 			generateBucket(i)
 		}
 		bucketSum += value
 	}
-	generateBucket(len(c.Values))
+	generateBucket(len(axis.Values))
 
 	return
 }
@@ -226,44 +134,44 @@ func (c *chunk) GetFocusRows(threshold uint64) (count int) {
 // Given a `threshold`, merge the rows with less traffic,
 // and merge the most `ratio` rows at a time.
 // `target` is the estimated final number of rows.
-func (c *chunk) Focus(strategy Strategy, threshold uint64, ratio int, target int) chunk {
+func (axis *Axis) Focus(strategy Strategy, threshold uint64, ratio int, target int) Axis {
 	newKeys := make([]string, 0, target)
 	newValues := make([]uint64, 0, target)
-	newKeys = append(newKeys, c.Keys[0])
+	newKeys = append(newKeys, axis.Keys[0])
 
 	start := 0
 	var bucketSum uint64 = 0
 	generateBucket := func(end int) {
 		if end > start {
-			newKeys = append(newKeys, c.Keys[end])
+			newKeys = append(newKeys, axis.Keys[end])
 			newValues = append(newValues, bucketSum)
 			start = end
 			bucketSum = 0
 		}
 	}
 
-	for i, value := range c.Values {
+	for i, value := range axis.Values {
 		if value >= threshold ||
 			bucketSum >= threshold ||
 			i-start >= ratio ||
-			strategy.CrossBorder(c.Keys[start], c.Keys[i]) {
+			strategy.CrossBorder(axis.Keys[start], axis.Keys[i]) {
 			generateBucket(i)
 		}
 		bucketSum += value
 	}
-	generateBucket(len(c.Values))
+	generateBucket(len(axis.Values))
 
-	return createChunk(newKeys, newValues)
+	return CreateAxis(newKeys, newValues)
 }
 
 // Divide uses binary search to find a suitable threshold, which can reduce the number of buckets of Axis to near the target.
-func (c *chunk) Divide(strategy Strategy, target int) chunk {
-	if target >= len(c.Values) {
-		return *c
+func (axis *Axis) Divide(strategy Strategy, target int) Axis {
+	if target >= len(axis.Values) {
+		return *axis
 	}
 	// get upperThreshold
 	var upperThreshold uint64 = 1
-	for _, value := range c.Values {
+	for _, value := range axis.Values {
 		upperThreshold += value
 	}
 	// search threshold
@@ -271,7 +179,7 @@ func (c *chunk) Divide(strategy Strategy, target int) chunk {
 	targetFocusRows := target * 2 / 3 // TODO: This var can be adjusted
 	for lowerThreshold < upperThreshold {
 		mid := (lowerThreshold + upperThreshold) >> 1
-		if c.GetFocusRows(mid) > targetFocusRows {
+		if axis.GetFocusRows(mid) > targetFocusRows {
 			lowerThreshold = mid + 1
 		} else {
 			upperThreshold = mid
@@ -279,7 +187,7 @@ func (c *chunk) Divide(strategy Strategy, target int) chunk {
 	}
 
 	threshold := lowerThreshold
-	focusRows := c.GetFocusRows(threshold)
-	ratio := len(c.Values)/(target-focusRows) + 1
-	return c.Focus(strategy, threshold, ratio, target)
+	focusRows := axis.GetFocusRows(threshold)
+	ratio := len(axis.Values)/(target-focusRows) + 1
+	return axis.Focus(strategy, threshold, ratio, target)
 }

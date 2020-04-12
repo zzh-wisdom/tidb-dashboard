@@ -13,7 +13,6 @@ import (
 	"github.com/pingcap/log"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 )
 
 const (
@@ -92,7 +91,7 @@ func NewBackUpManage(db *dbstore.DB) *BackUpManage {
 	}
 }
 
-func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis matrix.Axis) error {
+func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis MemAxis) error {
 	err := b.SaveKeys(axis.Keys)
 	if err != nil {
 		return err
@@ -137,7 +136,7 @@ func (b *BackUpManage) storeKey(key string) error {
 	return b.Db.Create(&KeyIntern{ID: id, Key: key}).Error
 }
 
-func (b *BackUpManage) DeletePlane(num uint8, time time.Time, axis matrix.Axis) error {
+func (b *BackUpManage) DeletePlane(num uint8, time time.Time, axis MemAxis) error {
 	err := b.DeletKeys(axis.Keys)
 	if err != nil {
 		return err
@@ -176,11 +175,12 @@ func (b *BackUpManage) eraseKey(keys []string) error {
 }
 
 // Restore restore all data from db
-func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes []matrix.Plane) {
+func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
+	layerCount := len(stat.layers)
 	// establish start `Plane` for each layer
 	createStartPlanes := func() {
 		for i := 0; i < layerCount; i++ {
-			err := b.InsertPlane(uint8(i), nowTime, matrix.Axis{})
+			err := b.InsertPlane(uint8(i), nowTime, MemAxis{})
 			log.Debug("Insert startTime plane", zap.Uint8("Num", uint8(i)), zap.Time("StartTime", nowTime), zap.Error(err))
 		}
 	}
@@ -206,6 +206,9 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 		log.Fatal("scanAllKeysFromDB error", zap.Error(err))
 	}
 
+	var timesList [][]time.Time
+	var memAxesList [][]MemAxis
+
 	for num := 0; num < layerCount; num++ {
 		planes, err := b.findPlaneOrderByTime(uint8(num))
 		if err != nil {
@@ -228,31 +231,43 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 			break
 		}
 
-		times := make([]time.Time, 1, len(planes))
-		axes := make([]matrix.Axis, len(planes)-1)
-		tempTimes := make([]time.Time, len(planes)-1)
-		times[0] = planes[0].Time
+		log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1))
+		stat.layers[num].Empty = len(planes) <= 1
+		stat.layers[num].StartTime = planes[0].Time
+		stat.layers[num].Head = 0
+		n := len(planes) - 1
+		if n > stat.layers[num].Len {
+			log.Fatal("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", stat.layers[num].Len), zap.Int("num", num))
+		}
+		stat.layers[num].EndTime = planes[n].Time
+		stat.layers[num].Tail = (stat.layers[num].Head + n) % stat.layers[num].Len
 
-		validPlanes := planes[1:]
-		for i := range validPlanes {
-			tempTimes[i] = validPlanes[i].Time
-			axis, err := validPlanes[i].unmarshalAxis()
+		times := []time.Time{planes[0].Time}
+		axes := []MemAxis{MemAxis{}}
+		tempTimes := make([]time.Time, len(planes)-1)
+		tempAxes := make([]MemAxis, len(planes)-1)
+		for i, plane := range planes[1:] {
+			tempTimes[i] = plane.Time
+			axis, err := plane.unmarshalAxis()
 			if err != nil {
 				log.Fatal("unexpected error", zap.Error(err))
 			}
-			axes[i].ValuesList = axis.ValuesList
-			axes[i].Keys = make([]string, len(axis.Keys))
-			axes[i].IsSep = axis.IsSep
+			log.Debug("unmarshalAxis", zap.Int("len", len(axis.ValuesList)))
+			tempAxes[i].ValuesList = axis.ValuesList
+			tempAxes[i].Keys = make([]string, len(axis.Keys))
+			tempAxes[i].IsSep = axis.IsSep
 			for j := range axis.Keys {
-				axes[i].Keys[j] = IDKeyMap[axis.Keys[j]]
+				tempAxes[i].Keys[j] = IDKeyMap[axis.Keys[j]]
 			}
+
+			stat.layers[num].RingTimes[i] = plane.Time
+			stat.layers[num].RingAxes[i] = tempAxes[i]
 		}
+
 		times = append(times, tempTimes...)
-		mPlane := matrix.Plane{
-			Times: times,
-			Axes:  axes,
-		}
-		matrixPlanes = append(matrixPlanes, mPlane)
+		axes = append(axes, tempAxes...)
+		timesList = append(timesList, times)
+		memAxesList = append(memAxesList, axes)
 	}
 
 	// clear table Plane
@@ -265,21 +280,14 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 	if err != nil {
 		log.Fatal("Clear table KeyIntern error", zap.Error(err))
 	}
-	for num := range matrixPlanes {
-		// startPlane
-		err := b.InsertPlane(uint8(num), matrixPlanes[num].Times[0], matrix.Axis{})
-		if err != nil {
-			log.Fatal("InsertPlane error", zap.Error(err))
-		}
-		tempTimes := matrixPlanes[num].Times[1:]
-		for i, axis := range matrixPlanes[num].Axes {
-			err := b.InsertPlane(uint8(num), tempTimes[i], axis)
+	for num := range memAxesList {
+		for i, axis := range memAxesList[num] {
+			err := b.InsertPlane(uint8(num), timesList[num][i], axis)
 			if err != nil {
 				log.Fatal("InsertPlane error", zap.Error(err))
 			}
 		}
 	}
-	return
 }
 
 func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err error) {

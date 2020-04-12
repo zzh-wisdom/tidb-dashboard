@@ -14,7 +14,6 @@
 package matrix
 
 import (
-	"sync"
 	"time"
 )
 
@@ -38,84 +37,24 @@ func CreatePlane(times []time.Time, axes []Axis) Plane {
 }
 
 // CreateEmptyPlane constructs a minimal empty Plane with the given parameters.
-func CreateEmptyPlane(startTime, endTime time.Time, startKey, endKey string, valuesListLen int) Plane {
-	return CreatePlane([]time.Time{startTime, endTime}, []Axis{CreateEmptyAxis(startKey, endKey, valuesListLen)})
+func CreateEmptyPlane(startTime, endTime time.Time, startKey, endKey string) Plane {
+	return CreatePlane([]time.Time{startTime, endTime}, []Axis{CreateEmptyAxis(startKey, endKey)})
 }
 
 // Compact compacts Plane into an axis.
-func (plane *Plane) Compact(strategy Strategy) Axis {
-	chunks := make([]chunk, len(plane.Axes))
-	for i, axis := range plane.Axes {
-		chunks[i] = createChunk(axis.Keys, axis.ValuesList[0])
-	}
-	compactChunk, helper := compact(strategy, chunks)
-	valuesListLen := len(plane.Axes[0].ValuesList)
-	valuesList := make([][]uint64, valuesListLen)
-	valuesList[0] = compactChunk.Values
-	for j := 1; j < valuesListLen; j++ {
-		compactChunk.SetZeroValues()
-		for i, axis := range plane.Axes {
-			chunks[i].SetValues(axis.ValuesList[j])
-			strategy.Split(compactChunk, chunks[i], splitAdd, i, helper)
-		}
-		valuesList[j] = compactChunk.Values
-	}
-	return CreateAxis(compactChunk.Keys, valuesList)
-}
-
-// Pixel pixelates Plane into a matrix with a number of rows close to the target.
-func (plane *Plane) Pixel(strategy Strategy, target int, displayTags []string) Matrix {
-	valuesListLen := len(plane.Axes[0].ValuesList)
-	if valuesListLen != len(displayTags) {
-		panic("the length of displayTags and valuesList should be equal")
-	}
-	axesLen := len(plane.Axes)
-	chunks := make([]chunk, axesLen)
-	for i, axis := range plane.Axes {
-		chunks[i] = createChunk(axis.Keys, axis.ValuesList[0])
-	}
-	compactChunk, helper := compact(strategy, chunks)
-	baseKeys := compactChunk.Divide(strategy, target).Keys
-	matrix := CreateMatrix(strategy, plane.Times, baseKeys, valuesListLen)
-
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	generateFunc := func(j int) {
-		data := make([][]uint64, axesLen)
-		goCompactChunk := createZeroChunk(compactChunk.Keys)
-		for i, axis := range plane.Axes {
-			goCompactChunk.Clear()
-			strategy.Split(goCompactChunk, createChunk(chunks[i].Keys, axis.ValuesList[j]), splitTo, i, helper)
-			data[i] = goCompactChunk.Reduce(baseKeys).Values
-		}
-		mutex.Lock()
-		matrix.DataMap[displayTags[j]] = data
-		mutex.Unlock()
-		wg.Done()
-	}
-
-	wg.Add(valuesListLen)
-	for j := 0; j < valuesListLen; j++ {
-		go generateFunc(j)
-	}
-	wg.Wait()
-
-	return matrix
-}
-
-func compact(strategy Strategy, chunks []chunk) (compactChunk chunk, helper interface{}) {
-	// get compact chunk keys
+func (plane *Plane) Compact(strategy Strategy) (Axis, interface{}) {
+	// get compact Axis keys
 	keySet := make(map[string]struct{})
 	unlimitedEnd := false
-	for _, c := range chunks {
-		end := len(c.Keys) - 1
-		endKey := c.Keys[end]
+	for _, axis := range plane.Axes {
+		end := len(axis.Keys) - 1
+		endKey := axis.Keys[end]
 		if endKey == "" {
 			unlimitedEnd = true
 		} else {
 			keySet[endKey] = struct{}{}
 		}
-		for _, key := range c.Keys[:end] {
+		for _, key := range axis.Keys[:end] {
 			keySet[key] = struct{}{}
 		}
 	}
@@ -126,11 +65,29 @@ func compact(strategy Strategy, chunks []chunk) (compactChunk chunk, helper inte
 	} else {
 		compactKeys = MakeKeys(keySet)
 	}
-	compactChunk = createZeroChunk(compactKeys)
+	compactAxis := CreateZeroAxis(compactKeys)
 
-	helper = strategy.GenerateHelper(chunks, compactChunk.Keys)
-	for i, c := range chunks {
-		strategy.Split(compactChunk, c, splitAdd, i, helper)
+	helper := strategy.GenerateHelper(plane.Axes, compactAxis.Keys)
+	for i, c := range plane.Axes {
+		strategy.Split(compactAxis, c, SplitAdd, i, helper)
 	}
-	return
+	return compactAxis, helper
+}
+
+// Pixel pixelates Plane into a matrix with a number of rows close to the target.
+func (plane *Plane) Pixel(strategy Strategy, target int, displayTag string) Matrix {
+	compactAxis, helper := plane.Compact(strategy)
+	baseKeys := compactAxis.Divide(strategy, target).Keys
+	matrix := CreateMatrix(strategy, plane.Times, baseKeys)
+
+	axesLen := len(plane.Axes)
+	data := make([][]uint64, axesLen)
+	goCompactAxis := CreateZeroAxis(compactAxis.Keys)
+	for i, axis := range plane.Axes {
+		goCompactAxis.Clear()
+		strategy.Split(goCompactAxis, axis, SplitTo, i, helper)
+		data[i] = goCompactAxis.Reduce(baseKeys).Values
+	}
+	matrix.DataMap[displayTag] = data
+	return matrix
 }

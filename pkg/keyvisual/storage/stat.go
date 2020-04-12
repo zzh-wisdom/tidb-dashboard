@@ -40,7 +40,7 @@ type LayerConfig struct {
 type layerStat struct {
 	StartTime time.Time
 	EndTime   time.Time
-	RingAxes  []matrix.Axis
+	RingAxes  []MemAxis
 	RingTimes []time.Time
 
 	Num   uint8
@@ -60,7 +60,7 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 	return &layerStat{
 		StartTime: startTime,
 		EndTime:   startTime,
-		RingAxes:  make([]matrix.Axis, conf.Len),
+		RingAxes:  make([]MemAxis, conf.Len),
 		RingTimes: make([]time.Time, conf.Len),
 		Num:       num,
 		Head:      0,
@@ -81,7 +81,7 @@ func (s *layerStat) Reduce() {
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
-		s.RingAxes[s.Head] = matrix.Axis{}
+		s.RingAxes[s.Head] = MemAxis{}
 		s.Head = (s.Head + 1) % s.Len
 		return
 	}
@@ -101,7 +101,7 @@ func (s *layerStat) Reduce() {
 
 	times := make([]time.Time, 0, s.Ratio+1)
 	times = append(times, s.StartTime)
-	axes := make([]matrix.Axis, 0, s.Ratio)
+	axes := make([]MemAxis, 0, s.Ratio)
 
 	// 注意将IsSep也持久化
 	high := s.Ratio
@@ -118,7 +118,7 @@ func (s *layerStat) Reduce() {
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
 		axes = append(axes, s.RingAxes[s.Head])
-		s.RingAxes[s.Head] = matrix.Axis{}
+		s.RingAxes[s.Head] = MemAxis{}
 		s.Head = (s.Head + 1) % s.Len
 	}
 	if len(axes) == 1 {
@@ -126,16 +126,15 @@ func (s *layerStat) Reduce() {
 		return
 	}
 
-	plane := matrix.CreatePlane(times, axes)
-	newAxis := plane.Compact(s.Strategy)
-	newAxis = IntoResponseAxis(newAxis, region.Integration)
-	newAxis = IntoStorageAxis(newAxis, s.Strategy)
-	newAxis.Shrink(uint64(s.Ratio))
-	s.Next.Append(newAxis, s.StartTime)
+	compactAxis := Compact(times, axes, s.Strategy)
+	compactAxis = RichStorageAxis(compactAxis)
+	newStorageAxis := ConciseStorageAxis(compactAxis, s.Strategy)
+	newStorageAxis.Shrink(uint64(s.Ratio))
+	s.Next.Append(newStorageAxis, s.StartTime)
 }
 
 // Append appends a key axis to layerStat.
-func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
+func (s *layerStat) Append(axis MemAxis, endTime time.Time) {
 	if s.Head == s.Tail && !s.Empty {
 		s.Reduce()
 	}
@@ -151,7 +150,7 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 }
 
 // Range gets the specify plane in the time range.
-func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes []matrix.Axis) {
+func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes []MemAxis) {
 	if s.Next != nil {
 		times, axes = s.Next.Range(startTime, endTime)
 	}
@@ -256,31 +255,11 @@ func (s *Stat) Restore(startTime time.Time) {
 	log.Debug("keyviz: restore data from dbstore")
 	s.mutex.Lock()
 
-	planes := s.backUpManage.Restore(len(s.layers), startTime)
-	if len(planes) != 0 {
-		for num, plane := range planes {
-			log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(plane.Axes)))
-
-			s.layers[num].Empty = len(plane.Axes) <= 1
-			s.layers[num].StartTime = plane.Times[0]
-			s.layers[num].Head = 0
-			n := len(plane.Axes)
-			if n > s.layers[num].Len {
-				log.Fatal("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", s.layers[num].Len), zap.Int("num", num))
-			}
-			s.layers[num].EndTime = plane.Times[n]
-			s.layers[num].Tail = (s.layers[num].Head + n) % s.layers[num].Len
-			tempTime := plane.Times[1 : n+1]
-			for i, axis := range plane.Axes {
-				s.layers[num].RingTimes[i] = tempTime[i]
-				s.layers[num].RingAxes[i] = axis
-			}
-		}
-	}
+	s.backUpManage.Restore(s, startTime)
 
 	if !startTime.Before(s.getLastestEndTime().Add(s.maxDowntime)) {
 		log.Debug("New Segmentation Axis", zap.Time("EndTime", startTime))
-		sepAxis := matrix.CreateSepAxis(len(region.StorageTags))
+		sepAxis := CreateSepMemAxis(len(region.StorageTags))
 		s.layers[0].Append(sepAxis, startTime)
 	}
 
@@ -325,7 +304,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	if regions.Len() == 0 {
 		return
 	}
-	axis := CreateStorageAxis(regions, s.strategy)
+	axis := CreateStorageAxisFromRegions(regions, s.strategy)
 
 	s.mutex.Lock()
 	//defer s.mutex.Unlock()
@@ -348,31 +327,32 @@ func (s *Stat) generateMatrix() matrix.Matrix {
 	reportEndTime := s.reportManage.ReportTime
 	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime))
 	plane := s.Range(reportStartTime, reportEndTime, "", "", region.Integration)
-	newMatrix := plane.Pixel(s.strategy, s.reportManage.ReportMaxDisplayY, region.GetDisplayTags(region.Integration))
+	newMatrix := plane.Pixel(s.strategy, s.reportManage.ReportMaxDisplayY, region.Integration.String())
 	return newMatrix
 }
 
-func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []matrix.Axis) {
+func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []MemAxis) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.layers[0].Range(startTime, endTime)
 }
 
 // Range returns a sub Plane with specified range.
-func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, baseTag region.StatTag) matrix.Plane {
+func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, respTag region.StatTag) matrix.Plane {
 	s.backUpManage.InternKey(&startKey)
 	s.backUpManage.InternKey(&endKey)
 
 	times, axes := s.rangeRoot(startTime, endTime)
 
 	if len(times) <= 1 {
-		return matrix.CreateEmptyPlane(startTime, endTime, startKey, endKey, len(region.ResponseTags))
+		return matrix.CreateEmptyPlane(startTime, endTime, startKey, endKey)
 	}
 
+	matrixAxes := make([]matrix.Axis, len(axes))
 	for i, axis := range axes {
 		axis = axis.Range(startKey, endKey)
-		axis = IntoResponseAxis(axis, baseTag)
-		axes[i] = axis
+		matrixAxis := IntoMatrixAxis(axis, respTag)
+		matrixAxes[i] = matrixAxis
 	}
-	return matrix.CreatePlane(times, axes)
+	return matrix.CreatePlane(times, matrixAxes)
 }
