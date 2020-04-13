@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	tablePlaneName     = "planes"
+	tablePlaneName     = "db_planes"
 	tableKeyInternName = "key_interns"
 )
 
@@ -30,40 +30,40 @@ func (KeyIntern) TableName() string {
 	return tableKeyInternName
 }
 
-type Axis struct {
+type DbAxis struct {
 	Keys       []uint64
 	ValuesList [][]uint64
 	IsSep      bool
 }
 
-type Plane struct {
-	LayerNum uint8 `gorm:"column:layer_num"`
-	Time     time.Time
-	Axis     []byte
+type DbPlane struct {
+	LayerNum   uint8 `gorm:"column:layer_num"`
+	Time       time.Time
+	AxisEncode []byte
 }
 
-func (Plane) TableName() string {
+func (DbPlane) TableName() string {
 	return tablePlaneName
 }
 
-func NewPlane(num uint8, time time.Time, axis Axis) (*Plane, error) {
+func NewDbPlane(num uint8, time time.Time, axis DbAxis) (*DbPlane, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(axis)
 	if err != nil {
 		return nil, err
 	}
-	return &Plane{
+	return &DbPlane{
 		num,
 		time,
 		buf.Bytes(),
 	}, nil
 }
 
-func (p Plane) unmarshalAxis() (Axis, error) {
-	var buf = bytes.NewBuffer(p.Axis)
+func (dp DbPlane) unmarshalAxis() (DbAxis, error) {
+	var buf = bytes.NewBuffer(dp.AxisEncode)
 	dec := gob.NewDecoder(buf)
-	var axis Axis
+	var axis DbAxis
 	err := dec.Decode(&axis)
 	return axis, err
 }
@@ -92,13 +92,13 @@ func NewBackUpManage(db *dbstore.DB) *BackUpManage {
 	}
 }
 
-func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis matrix.Axis) error {
+func (b *BackUpManage) InsertDbPlane(num uint8, time time.Time, axis matrix.Axis) error {
 	err := b.SaveKeys(axis.Keys)
 	if err != nil {
 		return err
 	}
 
-	newAxis := Axis{
+	newAxis := DbAxis{
 		Keys:       make([]uint64, len(axis.Keys)),
 		ValuesList: axis.ValuesList,
 		IsSep:      axis.IsSep,
@@ -106,7 +106,7 @@ func (b *BackUpManage) InsertPlane(num uint8, time time.Time, axis matrix.Axis) 
 	for i, key := range axis.Keys {
 		newAxis.Keys[i] = getKeyID(key)
 	}
-	plane, err := NewPlane(num, time, newAxis)
+	plane, err := NewDbPlane(num, time, newAxis)
 	if err != nil {
 		return err
 	}
@@ -137,21 +137,21 @@ func (b *BackUpManage) storeKey(key string) error {
 	return b.Db.Create(&KeyIntern{ID: id, Key: key}).Error
 }
 
-func (b *BackUpManage) DeletePlane(num uint8, time time.Time, axis matrix.Axis) error {
-	err := b.DeletKeys(axis.Keys)
+func (b *BackUpManage) DeleteDbPlane(num uint8, time time.Time, axis matrix.Axis) error {
+	err := b.DeleteKeys(axis.Keys)
 	if err != nil {
 		return err
 	}
 	return b.Db.
 		Where("layer_num = ? AND time = ?", num, time).
-		Delete(&Plane{}).
+		Delete(&DbPlane{}).
 		Error
 }
 
-// DeletKeys check the count of every key firstly,
+// DeleteKeys check the count of every key firstly,
 // if count = 1, delete it from sync.Map and db,
 // or modify count = count - 1
-func (b *BackUpManage) DeletKeys(keys []string) error {
+func (b *BackUpManage) DeleteKeys(keys []string) error {
 	var dKeys []string
 	for _, key := range keys {
 		pKeyCount, ok := b.Load(key)
@@ -180,12 +180,12 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 	// establish start `Plane` for each layer
 	createStartPlanes := func() {
 		for i := 0; i < layerCount; i++ {
-			err := b.InsertPlane(uint8(i), nowTime, matrix.Axis{})
+			err := b.InsertDbPlane(uint8(i), nowTime, matrix.Axis{})
 			log.Debug("Insert startTime plane", zap.Uint8("Num", uint8(i)), zap.Time("StartTime", nowTime), zap.Error(err))
 		}
 	}
 
-	isExist1, err := CreateTableIfNotExists(b.Db, &Plane{})
+	isExist1, err := CreateTableIfNotExists(b.Db, &DbPlane{})
 	if err != nil {
 		log.Panic("Create table Plane fail", zap.Error(err))
 	}
@@ -219,7 +219,7 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 		}
 		if len(planes) == 1 && num == 0 {
 			// no valid data was stored，clear
-			err := ClearTable(b.Db, &Plane{})
+			err := ClearTable(b.Db, &DbPlane{})
 			log.Debug("Clear table plane")
 			if err != nil {
 				log.Fatal("Clear table plane", zap.Error(err))
@@ -256,7 +256,7 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 	}
 
 	// clear table Plane
-	err = ClearTable(b.Db, &Plane{})
+	err = ClearTable(b.Db, &DbPlane{})
 	if err != nil {
 		log.Fatal("Clear table plane error", zap.Error(err))
 	}
@@ -267,13 +267,13 @@ func (b *BackUpManage) Restore(layerCount int, nowTime time.Time) (matrixPlanes 
 	}
 	for num := range matrixPlanes {
 		// startPlane
-		err := b.InsertPlane(uint8(num), matrixPlanes[num].Times[0], matrix.Axis{})
+		err := b.InsertDbPlane(uint8(num), matrixPlanes[num].Times[0], matrix.Axis{})
 		if err != nil {
 			log.Fatal("InsertPlane error", zap.Error(err))
 		}
 		tempTimes := matrixPlanes[num].Times[1:]
 		for i, axis := range matrixPlanes[num].Axes {
-			err := b.InsertPlane(uint8(num), tempTimes[i], axis)
+			err := b.InsertDbPlane(uint8(num), tempTimes[i], axis)
 			if err != nil {
 				log.Fatal("InsertPlane error", zap.Error(err))
 			}
@@ -307,8 +307,8 @@ func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err erro
 	return
 }
 
-func (b *BackUpManage) findPlaneOrderByTime(num uint8) ([]Plane, error) {
-	var planes []Plane
+func (b *BackUpManage) findPlaneOrderByTime(num uint8) ([]DbPlane, error) {
+	var planes []DbPlane
 	err := b.Db.
 		Where("layer_num = ?", num).
 		Order("Time").

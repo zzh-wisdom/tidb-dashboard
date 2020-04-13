@@ -77,7 +77,7 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 // Reduce merges ratio axes and append to next layerStat
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
-		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
+		err := s.BUM.DeleteDbPlane(s.Num, s.StartTime, s.RingAxes[s.Head])
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
@@ -112,7 +112,7 @@ func (s *layerStat) Reduce() {
 		if s.RingAxes[s.Head].IsSep && i != 0 {
 			break
 		}
-		err := s.BUM.DeletePlane(s.Num, s.StartTime, s.RingAxes[s.Head])
+		err := s.BUM.DeleteDbPlane(s.Num, s.StartTime, s.RingAxes[s.Head])
 		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
@@ -140,7 +140,7 @@ func (s *layerStat) Append(axis matrix.Axis, endTime time.Time) {
 		s.Reduce()
 	}
 
-	err := s.BUM.InsertPlane(s.Num, endTime, axis)
+	err := s.BUM.InsertDbPlane(s.Num, endTime, axis)
 	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
 
 	s.RingAxes[s.Tail] = axis
