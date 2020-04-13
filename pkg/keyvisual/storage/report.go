@@ -244,6 +244,9 @@ func (r *ReportManage) FindReport(endTime time.Time) (matrix DbMatrix, isFind bo
 	if err != nil {
 		return
 	}
+	if !report.StartTime.Before(endTime) {
+		return
+	}
 	isFind = true
 	var buf = bytes.NewBuffer(report.MatrixEncode)
 	dec := gob.NewDecoder(buf)
