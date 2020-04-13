@@ -23,7 +23,7 @@ LDFLAGS += -X "$(DASHBOARD_PKG)/pkg/utils.GitBranch=$(shell git rev-parse --abbr
 
 
 default:
-    SWAGGER=1 make server
+	SWAGGER=1 make server
 
 lint:
 	scripts/lint.sh
