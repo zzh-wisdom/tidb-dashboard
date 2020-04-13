@@ -270,12 +270,12 @@ func newWaitGroup(lc fx.Lifecycle) *sync.WaitGroup {
 }
 
 func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, labelStrategy decorator.LabelStrategy) matrix.Strategy {
-	config := matrix.NewStrategyConfig(matrix.StrategyMode(cfg.MatrixStrategyMode), distanceStrategyRatio, distanceStrategyLevel, distanceStrategyCount)
-	log.Info("matrix strategy mode", zap.String("Mode", matrix.StrategyMode(cfg.MatrixStrategyMode).String()))
-	return matrix.NewStrategy(lc, wg, config, labelStrategy)
+	strategyConfig := matrix.NewStrategyConfig(matrix.HeatmapStrategy(cfg.HeatmapStrategyMode), distanceStrategyRatio, distanceStrategyLevel, distanceStrategyCount)
+	log.Info("HeatmapStrategy", zap.String("Mode", matrix.HeatmapStrategy(cfg.HeatmapStrategyMode).String()))
+	return matrix.NewStrategy(lc, wg, strategyConfig, labelStrategy)
 }
 
-func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, provider *region.PDDataProvider, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
+func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
 	statInputMode := input.StatInputMode(cfg.StatInputMode)
 	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
 	isOpenBackUp := statInputMode == input.PeriodicInputMode

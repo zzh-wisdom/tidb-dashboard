@@ -57,19 +57,6 @@ func CreateMemAxis(keysList [][]string, valuesList [][]uint64) MemAxis {
 	}
 }
 
-// CreateEmptyAxis constructs a minimal empty Axis with the given parameters.
-func CreateEmptyMemAxis(startKey, endKey string, valuesListLen int) MemAxis {
-	keys := []string{startKey, endKey}
-	values := []uint64{0}
-	keysList := make([][]string, valuesListLen)
-	valuesList := make([][]uint64, valuesListLen)
-	for i := range valuesList {
-		keysList[i] = keys
-		valuesList[i] = values
-	}
-	return CreateMemAxis(keysList, valuesList)
-}
-
 // CreateEmptyAxis constructs a segmentation Axis
 func CreateSepMemAxis(valuesListLen int) MemAxis {
 	keys := []string{"", ""}
@@ -97,15 +84,15 @@ func (axis *MemAxis) Shrink(ratio uint64) {
 }
 
 // Range returns a sub Axis with specified range.
-func (axis *MemAxis) Range(strategy matrix.Strategy, startKey string, endKey string, tag region.StatTag) matrix.Axis {
+func (axis *MemAxis) Range(startKey string, endKey string, tag region.StatTag) matrix.Axis {
 	index := int(tag)
 	start, end, ok := matrix.KeysRange(axis.KeysList[index], startKey, endKey)
 	if !ok {
-		return matrix.CreateEmptyAxis(startKey, endKey, strategy.GetAxisStrategy())
+		return matrix.CreateEmptyAxis(startKey, endKey)
 	}
 	keys := axis.KeysList[index][start:end]
 	values := axis.ValuesList[index][start : end-1]
-	return matrix.CreateAxis(keys, values, strategy.GetAxisStrategy())
+	return matrix.CreateAxis(keys, values)
 }
 
 // Divide uses the base column as the chunk for the Divide operation to obtain the partitioning scheme, and uses this to
@@ -118,7 +105,7 @@ func (axis *MemAxis) Divide(strategy matrix.Strategy, target int) MemAxis {
 			keysList[i] = axis.KeysList[i]
 			valuesList[i] = axis.ValuesList[i]
 		} else {
-			matrixAxis := matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i], strategy.GetAxisStrategy())
+			matrixAxis := matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i])
 			newMatrixAxis := matrixAxis.Divide(strategy, target)
 			keysList[i] = newMatrixAxis.Keys
 			valuesList[i] = newMatrixAxis.Values
@@ -137,7 +124,7 @@ func Compact(times []time.Time, memAxes []MemAxis, strategy matrix.Strategy) Mem
 	valuesList := make([][]uint64, valuesListLen)
 	for i := 0; i < valuesListLen; i++ {
 		for j, axis := range memAxes {
-			axes[j] = matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i], strategy.GetAxisStrategy())
+			axes[j] = matrix.CreateAxis(axis.KeysList[i], axis.ValuesList[i])
 		}
 		plane := matrix.CreatePlane(times, axes)
 		compactAxis, _ := plane.Compact(strategy)

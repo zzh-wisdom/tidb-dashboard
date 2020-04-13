@@ -60,7 +60,7 @@ func BenchmarkGenerateScale(b *testing.B) {
 	disOrig := make([][]int, n)
 	dis := make([][]int, n)
 	for i := range axes {
-		axes[i] = CreateZeroAxis(data.Keys, SumThresholdStrategy)
+		axes[i] = CreateZeroAxis(data.Keys)
 		disOrig[i] = make([]int, len(data.Dis))
 	}
 	rollbackDis := func() {

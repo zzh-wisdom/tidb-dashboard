@@ -351,12 +351,12 @@ func (s *Stat) Range(startTime, endTime time.Time, startKey, endKey string, tag 
 	times, axes := s.rangeRoot(startTime, endTime)
 
 	if len(times) <= 1 {
-		return matrix.CreateEmptyPlane(s.strategy, startTime, endTime, startKey, endKey)
+		return matrix.CreateEmptyPlane(startTime, endTime, startKey, endKey)
 	}
 
 	matrixAxes := make([]matrix.Axis, len(axes))
 	for i, axis := range axes {
-		matrixAxis := axis.Range(s.strategy, startKey, endKey, tag)
+		matrixAxis := axis.Range(startKey, endKey, tag)
 		matrixAxes[i] = matrixAxis
 	}
 	return matrix.CreatePlane(times, matrixAxes)

@@ -31,11 +31,11 @@ func AverageStrategy(label decorator.LabelStrategy) Strategy {
 	}
 }
 
-func (averageStrategy) GenerateHelper(axes []Axis, compactKeys []string) interface{} {
+func (*averageStrategy) GenerateHelper(axes []Axis, compactKeys []string) interface{} {
 	return averageHelper{}
 }
 
-func (averageStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper interface{}) {
+func (*averageStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper interface{}) {
 	CheckPartOf(dst.Keys, src.Keys)
 
 	if len(dst.Keys) == len(src.Keys) {
@@ -86,6 +86,6 @@ func (averageStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper 
 	}
 }
 
-func (*averageStrategy) GetAxisStrategy() AxisStrategy {
-	return SumThresholdStrategy
+func (*averageStrategy) GetAxisCompactStrategy() AxisCompactStrategy {
+	return SumThresholdAxisCompactStrategy
 }

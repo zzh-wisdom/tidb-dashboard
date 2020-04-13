@@ -39,43 +39,64 @@ type splitStrategy interface {
 type Strategy interface {
 	splitStrategy
 	decorator.LabelStrategy
-	GetAxisStrategy() AxisStrategy
+	GetAxisCompactStrategy() AxisCompactStrategy
 }
 
-type StrategyMode int
+type AxisCompactStrategy int
 
 const (
-	DistanceStrategyMode    StrategyMode = 0
-	AverageStrategyMode     StrategyMode = 1
-	MaxBorderStrategyMode   StrategyMode = 2
-	MaxGradientStrategyMode StrategyMode = 3
+	SumThresholdAxisCompactStrategy AxisCompactStrategy = 0
+	MaxBorderAxisCompactStrategy    AxisCompactStrategy = 1
+	MaxGradientAxisCompactStrategy  AxisCompactStrategy = 2
 )
 
-func (sm StrategyMode) String() string {
-	switch sm {
-	case AverageStrategyMode:
-		return "AverageStrategy"
-	case DistanceStrategyMode:
-		return "DistanceStrategyMode"
-	case MaxBorderStrategyMode:
-		return "MaxBorderStrategyMode"
-	case MaxGradientStrategyMode:
-		return "MaxGradientStrategyMode"
+func (acs AxisCompactStrategy) String() string {
+	switch acs {
+	case SumThresholdAxisCompactStrategy:
+		return "SumThresholdAxisCompactStrategy"
+	case MaxBorderAxisCompactStrategy:
+		return "MaxBorderAxisCompactStrategy"
+	case MaxGradientAxisCompactStrategy:
+		return "MaxGradientAxisCompactStrategy"
+	default:
+		panic("unreachable")
+	}
+}
+
+type HeatmapStrategy int
+
+const (
+	DistanceHeatmapStrategy    HeatmapStrategy = 0
+	AverageHeatmapStrategy     HeatmapStrategy = 1
+	MaxBorderHeatmapStrategy   HeatmapStrategy = 2
+	MaxGradientHeatmapStrategy HeatmapStrategy = 3
+)
+
+func (hsm HeatmapStrategy) String() string {
+	switch hsm {
+	case DistanceHeatmapStrategy:
+		return "DistanceHeatmapStrategy"
+	case AverageHeatmapStrategy:
+		return "AverageHeatmapStrategy"
+	case MaxBorderHeatmapStrategy:
+		return "MaxBorderHeatmapStrategy"
+	case MaxGradientHeatmapStrategy:
+		return "MaxGradientHeatmapStrategy"
 	default:
 		panic("unreachable")
 	}
 }
 
 func NewStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, config *StrategyConfig, label decorator.LabelStrategy) Strategy {
-	switch config.Mode {
-	case AverageStrategyMode:
+	switch config.HeatmapStrategy {
+	case AverageHeatmapStrategy:
 		return AverageStrategy(label)
-	case DistanceStrategyMode:
+	case DistanceHeatmapStrategy:
 		return DistanceStrategy(lc, wg, label, config.DistanceStrategyRatio, config.DistanceStrategyLevel, config.distanceStrategyCount)
-	case MaxBorderStrategyMode:
-		return MaximumStrategy(label, MaxBorderStrategy)
-	case MaxGradientStrategyMode:
-		return MaximumStrategy(label, MaxGradientStrategy)
+	case MaxBorderHeatmapStrategy:
+		return MaximumStrategy(label, MaxBorderAxisCompactStrategy)
+	case MaxGradientHeatmapStrategy:
+		return MaximumStrategy(label, MaxGradientAxisCompactStrategy)
 	default:
 		panic("unreachable")
 	}

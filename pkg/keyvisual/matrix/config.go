@@ -1,16 +1,16 @@
 package matrix
 
 type StrategyConfig struct {
-	Mode StrategyMode
+	HeatmapStrategy
 
 	DistanceStrategyRatio float64
 	DistanceStrategyLevel int
 	distanceStrategyCount int
 }
 
-func NewStrategyConfig(mode StrategyMode, distanceStrategyRatio float64, distanceStrategyLevel, distanceStrategyCount int) *StrategyConfig {
+func NewStrategyConfig(heatmapStrategy HeatmapStrategy, distanceStrategyRatio float64, distanceStrategyLevel, distanceStrategyCount int) *StrategyConfig {
 	return &StrategyConfig{
-		mode,
+		heatmapStrategy,
 		distanceStrategyRatio,
 		distanceStrategyLevel,
 		distanceStrategyCount,

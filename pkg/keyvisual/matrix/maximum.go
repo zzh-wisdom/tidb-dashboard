@@ -7,14 +7,14 @@ type maximumHelper struct {
 }
 
 type maximumStrategy struct {
-	AxisStrategy
+	AxisCompactStrategy
 	decorator.LabelStrategy
 }
 
-func MaximumStrategy(label decorator.LabelStrategy, axisStrategy AxisStrategy) Strategy {
+func MaximumStrategy(label decorator.LabelStrategy, axisCompactStrategy AxisCompactStrategy) Strategy {
 	return &maximumStrategy{
-		AxisStrategy:  axisStrategy,
-		LabelStrategy: label,
+		AxisCompactStrategy: axisCompactStrategy,
+		LabelStrategy:       label,
 	}
 }
 
@@ -72,6 +72,6 @@ func (*maximumStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper
 	}
 }
 
-func (m *maximumStrategy) GetAxisStrategy() AxisStrategy {
-	return m.AxisStrategy
+func (m *maximumStrategy) GetAxisCompactStrategy() AxisCompactStrategy {
+	return m.AxisCompactStrategy
 }

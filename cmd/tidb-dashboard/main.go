@@ -79,7 +79,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.Int64Var(&cfg.KVFileStartTime, "keyviz-file-start", 0, "(debug) start time for file range in file mode")
 	flag.Int64Var(&cfg.KVFileEndTime, "keyviz-file-end", 0, "(debug) end time for file range in file mode")
 	// lab for keyvisual，hide help information
-	flag.IntVar(&cfg.CoreConfig.MatrixStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
+	flag.IntVar(&cfg.CoreConfig.HeatmapStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
 
 	clusterCaPath := flag.String("cluster-ca", "", "path of file that contains list of trusted SSL CAs.")
 	clusterCertPath := flag.String("cluster-cert", "", "path of file that contains X509 certificate in PEM format.")
