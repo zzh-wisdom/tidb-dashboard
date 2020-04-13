@@ -6,6 +6,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
+
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 
@@ -15,17 +18,58 @@ import (
 
 const tableReportName = "matrix_reports"
 
+type DbMatrix struct {
+	KeysMap    map[string][]string
+	DataMap    map[string][][]uint64
+	KeyAxisMap map[string][]decorator.LabelKey
+	TimeAxis   []int64
+}
+
+// All TimeAxis in `matrixes` must be equal, and
+// just one heatmap in each matrix
+func CreateDbMatrix(matrixes []matrix.Matrix) DbMatrix {
+	if len(matrixes) == 0 {
+		return DbMatrix{}
+	}
+	dbMatrix := DbMatrix{
+		KeysMap:    make(map[string][]string, len(matrixes)),
+		DataMap:    make(map[string][][]uint64, len(matrixes)),
+		KeyAxisMap: make(map[string][]decorator.LabelKey, len(matrixes)),
+		TimeAxis:   matrixes[0].TimeAxis,
+	}
+	for _, mx := range matrixes {
+		if len(mx.DataMap) != 1 {
+			panic("matrix must have only one heatmap")
+		}
+		for key, data := range mx.DataMap {
+			dbMatrix.KeysMap[key] = mx.Keys
+			dbMatrix.DataMap[key] = data
+			dbMatrix.KeyAxisMap[key] = mx.KeyAxis
+		}
+	}
+	return dbMatrix
+}
+
+func (d DbMatrix) GetTagMatrix(tag region.StatTag) matrix.Matrix {
+	return matrix.Matrix{
+		Keys:     d.KeysMap[tag.String()],
+		DataMap:  map[string][][]uint64{tag.String(): d.DataMap[tag.String()]},
+		KeyAxis:  d.KeyAxisMap[tag.String()],
+		TimeAxis: d.TimeAxis,
+	}
+}
+
 type Report struct {
-	StartTime time.Time `gorm:"column:start_time"`
-	EndTime   time.Time `gorm:"column:end_time;primary_key"`
-	Matrix    []byte    `gorm:"column:matrix"`
+	StartTime    time.Time `gorm:"column:start_time"`
+	EndTime      time.Time `gorm:"column:end_time;primary_key"`
+	MatrixEncode []byte    `gorm:"column:matrix"`
 }
 
 func (Report) TableName() string {
 	return tableReportName
 }
 
-func NewReport(startTime, endTime time.Time, matrix matrix.Matrix) (*Report, error) {
+func NewReport(startTime, endTime time.Time, matrix DbMatrix) (*Report, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(matrix)
@@ -33,9 +77,9 @@ func NewReport(startTime, endTime time.Time, matrix matrix.Matrix) (*Report, err
 		return nil, err
 	}
 	return &Report{
-		StartTime: startTime,
-		EndTime:   endTime,
-		Matrix:    buf.Bytes(),
+		StartTime:    startTime,
+		EndTime:      endTime,
+		MatrixEncode: buf.Bytes(),
 	}, nil
 }
 
@@ -134,7 +178,7 @@ func (r *ReportManage) IsNeedReport(nowTime time.Time) bool {
 	return !r.ReportTime.After(nowTime)
 }
 
-func (r *ReportManage) InsertReport(matrix matrix.Matrix) error {
+func (r *ReportManage) InsertReport(matrix DbMatrix) error {
 	if r.Head == r.Tail && !r.Empty {
 		err := r.DeleteReport()
 		if err != nil {
@@ -178,7 +222,7 @@ func (r *ReportManage) DeleteReport() error {
 	return nil
 }
 
-func (r *ReportManage) FindReport(endTime time.Time) (matrix matrix.Matrix, isFind bool, err error) {
+func (r *ReportManage) FindReport(endTime time.Time) (matrix DbMatrix, isFind bool, err error) {
 	isFind = false
 	err = nil
 	if r.Empty {
@@ -201,7 +245,7 @@ func (r *ReportManage) FindReport(endTime time.Time) (matrix matrix.Matrix, isFi
 		return
 	}
 	isFind = true
-	var buf = bytes.NewBuffer(report.Matrix)
+	var buf = bytes.NewBuffer(report.MatrixEncode)
 	dec := gob.NewDecoder(buf)
 	err = dec.Decode(&matrix)
 	return

@@ -292,12 +292,13 @@ func (s *Stat) getLastestEndTime() time.Time {
 	return s.layers[0].EndTime
 }
 
-func (s *Stat) GetReport(startTime, endTime time.Time, startKey, endKey string) (report matrix.Matrix, isFind bool) {
-	report, isFind, err := s.reportManage.FindReport(endTime)
+func (s *Stat) GetReport(startTime, endTime time.Time, startKey, endKey string, tag region.StatTag) (report matrix.Matrix, isFind bool) {
+	dbMatrix, isFind, err := s.reportManage.FindReport(endTime)
 	if err != nil {
 		log.Warn("GetReport error", zap.Error(err))
 	}
 	if isFind {
+		report = dbMatrix.GetTagMatrix(tag)
 		report.RangeTimeAndKey(startTime, endTime, startKey, endKey)
 	}
 	log.Debug("GetReport", zap.Time("EndTime", endTime), zap.Bool("isFind", isFind))
@@ -328,13 +329,18 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
 }
 
-func (s *Stat) generateMatrix() matrix.Matrix {
+func (s *Stat) generateMatrix() DbMatrix {
 	reportStartTime := s.reportManage.ReportTime.Add(-s.reportManage.ReportInterval)
 	reportEndTime := s.reportManage.ReportTime
 	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime))
-	plane := s.Range(reportStartTime, reportEndTime, "", "", region.Integration)
-	newMatrix := plane.Pixel(s.strategy, s.reportManage.ReportMaxDisplayY, region.Integration.String())
-	return newMatrix
+
+	matrixes := make([]matrix.Matrix, len(region.Tags))
+	for i, tag := range region.Tags {
+		plane := s.Range(reportStartTime, reportEndTime, "", "", tag)
+		newMatrix := plane.Pixel(s.strategy, s.reportManage.ReportMaxDisplayY, tag.String())
+		matrixes[i] = newMatrix
+	}
+	return CreateDbMatrix(matrixes)
 }
 
 func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []MemAxis) {

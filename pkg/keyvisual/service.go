@@ -60,8 +60,8 @@ var (
 			{Len: 24 / 4 * 28, Ratio: 0},                // step 4 hours, total 168, 4 weeks (sum: 5 weeks)
 		},
 		ReportConfig: storage.ReportConfig{
-			ReportInterval:    time.Minute * 10,
-			ReportTimeRange:   time.Minute * 10,
+			ReportInterval:    time.Second * 10,
+			ReportTimeRange:   time.Second * 10,
 			ReportMaxDisplayY: 1536,
 			MaxReportNum:      5 * 7 * 24 * 60 / 10, // 5 weeks
 		},
@@ -233,11 +233,11 @@ func (s *Service) heatmaps(c *gin.Context) {
 
 	// report test
 	if endKey != "" || startKey != "" {
-		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey)
+		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey, baseTag)
 		if isFind {
-			resp.DataMap = map[string][][]uint64{
-				typ: resp.DataMap[typ],
-			}
+			//resp.DataMap = map[string][][]uint64{
+			//	typ: resp.DataMap[typ],
+			//}
 			c.JSON(http.StatusOK, resp)
 			return
 		}

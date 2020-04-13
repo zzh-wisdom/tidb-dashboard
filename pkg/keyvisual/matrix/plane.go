@@ -89,5 +89,6 @@ func (plane *Plane) Pixel(strategy Strategy, target int, displayTag string) Matr
 		data[i] = goCompactAxis.Reduce(strategy, baseKeys).Values
 	}
 	matrix.DataMap[displayTag] = data
+	// log.Debug("Pixel", zap.String("tag", displayTag), zap.Int("Len", len(data)))
 	return matrix
 }

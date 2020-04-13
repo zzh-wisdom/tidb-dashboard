@@ -93,7 +93,7 @@ func (mx *Matrix) RangeTimeAndKey(startTime, endTime time.Time, startKey, endKey
 	}
 	mx.TimeAxis = mx.TimeAxis[start:end]
 	for key := range mx.DataMap {
-		mx.DataMap[key] = mx.DataMap[key][start:end]
+		mx.DataMap[key] = mx.DataMap[key][start : end-1]
 	}
 
 	mx.RangeKey(startKey, endKey)

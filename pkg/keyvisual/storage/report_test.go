@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/decorator"
+
 	"github.com/jinzhu/gorm"
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/dbstore"
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/matrix"
 )
 
 var testReportConfig = ReportConfig{
@@ -79,12 +80,12 @@ func (t *testReportSuite) TestRestoreReport(c *C) {
 	c.Assert(*t.reportManage, DeepEquals, reportManage)
 
 	endTime1 := t.reportManage.ReportTime
-	err = t.reportManage.InsertReport(matrix.Matrix{})
+	err = t.reportManage.InsertReport(DbMatrix{})
 	if err != nil {
 		c.Fatalf("InsertReport error: %v", err)
 	}
 	endTime2 := endTime1.Add(t.reportManage.ReportInterval)
-	err = t.reportManage.InsertReport(matrix.Matrix{})
+	err = t.reportManage.InsertReport(DbMatrix{})
 	if err != nil {
 		c.Fatalf("InsertReport error: %v", err)
 	}
@@ -99,7 +100,7 @@ func (t *testReportSuite) TestRestoreReport(c *C) {
 
 	startTime3 := endTime2
 	endTime3 := endTime2.Add(t.reportManage.ReportInterval)
-	report, err := NewReport(startTime3, endTime3, matrix.Matrix{})
+	report, err := NewReport(startTime3, endTime3, DbMatrix{})
 	c.Assert(err, IsNil)
 	err = t.reportManage.Db.Table(tableReportName).Create(report).Error
 	c.Assert(err, IsNil)
@@ -135,17 +136,18 @@ func (t *testReportSuite) TestInsertReportAndFindReport(c *C) {
 	obtainedMatrix, isFind, err := t.reportManage.FindReport(nowTime)
 	c.Assert(err, IsNil)
 	c.Assert(isFind, Equals, false)
-	c.Assert(obtainedMatrix, DeepEquals, matrix.Matrix{})
+	c.Assert(obtainedMatrix, DeepEquals, DbMatrix{})
 
 	endTime1 := nowTime
-	matrix1 := matrix.Matrix{
-		Keys: []string{"a", "b"},
+	matrix1 := DbMatrix{
 		DataMap: map[string][][]uint64{
 			"integration": {
 				{100},
 			},
 		},
-		KeyAxis:  nil,
+		KeyAxisMap: map[string][]decorator.LabelKey{
+			"integration": {decorator.NaiveLabelStrategy{}.Label("a"), decorator.NaiveLabelStrategy{}.Label("b")},
+		},
 		TimeAxis: []int64{1, 2},
 	}
 	err = t.reportManage.InsertReport(matrix1)
@@ -163,10 +165,10 @@ func (t *testReportSuite) TestInsertReportAndFindReport(c *C) {
 	obtainedMatrix, isFind, err = t.reportManage.FindReport(endTime1.Add(time.Second))
 	c.Assert(err, IsNil)
 	c.Assert(isFind, Equals, false)
-	c.Assert(obtainedMatrix, DeepEquals, matrix.Matrix{})
+	c.Assert(obtainedMatrix, DeepEquals, DbMatrix{})
 
 	endTime2 := endTime1.Add(t.reportManage.ReportInterval)
-	matrix2 := matrix.Matrix{}
+	matrix2 := DbMatrix{}
 	err = t.reportManage.InsertReport(matrix2)
 	c.Assert(err, IsNil)
 	endTime3 := endTime2.Add(t.reportManage.ReportInterval)
@@ -200,7 +202,7 @@ func (t *testReportSuite) TestInsertReportAndFindReport(c *C) {
 	obtainedMatrix, isFind, err = t.reportManage.FindReport(endTime3.Add(time.Second))
 	c.Assert(err, IsNil)
 	c.Assert(isFind, Equals, false)
-	c.Assert(obtainedMatrix, DeepEquals, matrix.Matrix{})
+	c.Assert(obtainedMatrix, DeepEquals, DbMatrix{})
 }
 
 func (t *testReportSuite) TestDeleteReport(c *C) {
@@ -213,9 +215,9 @@ func (t *testReportSuite) TestDeleteReport(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(*t.reportManage, DeepEquals, reportManage)
 
-	err = t.reportManage.InsertReport(matrix.Matrix{})
+	err = t.reportManage.InsertReport(DbMatrix{})
 	c.Assert(err, IsNil)
-	err = t.reportManage.InsertReport(matrix.Matrix{})
+	err = t.reportManage.InsertReport(DbMatrix{})
 	c.Assert(err, IsNil)
 
 	err = t.reportManage.DeleteReport()
