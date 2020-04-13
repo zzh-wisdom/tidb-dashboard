@@ -76,25 +76,16 @@ func (mx *Matrix) RangeKey(startKey, endKey string) {
 
 // Range returns a sub Matrix with specified range.
 func (mx *Matrix) RangeTimeAndKey(startTime, endTime time.Time, startKey, endKey string) {
-	start, end, ok := KeysRange(mx.Keys, startKey, endKey)
-	if !ok {
-		panic("unreachable")
-	}
-	mx.Keys = mx.Keys[start:end]
-	mx.KeyAxis = mx.KeyAxis[start:end]
-	for _, data := range mx.DataMap {
-		for i, axis := range data {
-			data[i] = axis[start : end-1]
-		}
-	}
-
 	startTimeUnix := startTime.Unix()
 	endTimeUnix := endTime.Unix()
 	timesSize := len(mx.TimeAxis)
-	start = sort.Search(timesSize, func(i int) bool {
+	start := sort.Search(timesSize, func(i int) bool {
 		return mx.TimeAxis[i] > startTimeUnix
 	})
-	end = sort.Search(timesSize, func(i int) bool {
+	if start != 0 {
+		start--
+	}
+	end := sort.Search(timesSize, func(i int) bool {
 		return mx.TimeAxis[i] >= endTimeUnix
 	})
 	if end != timesSize {
@@ -104,4 +95,6 @@ func (mx *Matrix) RangeTimeAndKey(startTime, endTime time.Time, startKey, endKey
 	for key := range mx.DataMap {
 		mx.DataMap[key] = mx.DataMap[key][start:end]
 	}
+
+	mx.RangeKey(startKey, endKey)
 }
