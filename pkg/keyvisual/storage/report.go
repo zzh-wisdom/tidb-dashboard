@@ -178,7 +178,15 @@ func (r *ReportManage) IsNeedReport(nowTime time.Time) bool {
 	return !r.ReportTime.After(nowTime)
 }
 
-func (r *ReportManage) InsertReport(matrix DbMatrix) error {
+func (r *ReportManage) updateReportTime(nowTime time.Time, dataInterval time.Duration) {
+	nextReportTime := r.ReportTime.Add(r.ReportInterval)
+	if !nextReportTime.After(nowTime) {
+		nextReportTime = nowTime.Add(r.ReportInterval - dataInterval)
+	}
+	r.ReportTime = nextReportTime
+}
+
+func (r *ReportManage) InsertReport(matrix DbMatrix, nowTime time.Time, dataInterval time.Duration) error {
 	if r.Head == r.Tail && !r.Empty {
 		err := r.DeleteReport()
 		if err != nil {
@@ -199,7 +207,7 @@ func (r *ReportManage) InsertReport(matrix DbMatrix) error {
 	r.Empty = false
 	r.Tail = (r.Tail + 1) % r.MaxReportNum
 	// update ReportTime
-	r.ReportTime = r.ReportTime.Add(r.ReportInterval)
+	r.updateReportTime(nowTime, dataInterval)
 	return nil
 }
 

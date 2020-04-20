@@ -14,7 +14,7 @@ type maximumStrategy struct {
 func MaximumStrategy(label decorator.LabelStrategy, axisCompactStrategy AxisDivideMode) Strategy {
 	return &maximumStrategy{
 		AxisDivideMode: axisCompactStrategy,
-		LabelStrategy:       label,
+		LabelStrategy:  label,
 	}
 }
 

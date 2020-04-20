@@ -208,7 +208,8 @@ func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes
 type StatConfig struct {
 	LayersConfig []LayerConfig
 	ReportConfig
-	MaxDowntime time.Duration
+	MaxDowntime  time.Duration
+	DataInterval time.Duration
 }
 
 // Stat is composed of multiple layerStats.
@@ -223,6 +224,7 @@ type Stat struct {
 	reportManage *ReportManage
 	backUpManage *BackUpManage
 	maxDowntime  time.Duration
+	dataInterval time.Duration
 }
 
 // NewStat generates a Stat based on the configuration.
@@ -243,6 +245,7 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
 		backUpManage: bum,
 		maxDowntime:  cfg.MaxDowntime,
+		dataInterval: cfg.DataInterval,
 	}
 
 	lc.Append(fx.Hook{
@@ -271,21 +274,24 @@ func (s *Stat) Restore(startTime time.Time) {
 	s.mutex.Unlock()
 
 	// restore Report data
-	initReportTime := s.reportManage.ReportTime
 	err := s.reportManage.RestoreReport()
 	if err != nil {
 		log.Panic("restore report error", zap.Error(err))
 	}
-	//log.Debug("all reports", zap.Times("EndTime", s.reportManage.ReportEndTimes))
-	if s.reportManage.IsNeedReport(initReportTime.Add(-s.reportManage.ReportInterval)) {
+	// log.Debug("", zap.Time("ReportTime", s.reportManage.ReportTime), zap.Time("startTime", startTime))
+	if s.reportManage.IsNeedReport(startTime) {
+		// log.Debug("New Report")
 		newMatrix := s.generateMatrix()
-		err := s.reportManage.InsertReport(newMatrix)
+		err := s.reportManage.InsertReport(newMatrix, startTime, s.dataInterval)
 		if err != nil {
 			log.Warn("InsertReport error", zap.Error(err))
 		}
-		s.reportManage.ReportTime = initReportTime
 	}
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
+}
+
+func (s *Stat) GetDataInterval() time.Duration {
+	return s.dataInterval
 }
 
 func (s *Stat) getLastestEndTime() time.Time {
@@ -315,6 +321,11 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 
 	s.mutex.Lock()
 	//defer s.mutex.Unlock()
+	if !endTime.Before(s.getLastestEndTime().Add(s.dataInterval + s.maxDowntime)) {
+		log.Debug("New Segmentation Axis", zap.Time("EndTime", endTime))
+		sepAxis := CreateSepMemAxis(len(region.Tags))
+		s.layers[0].Append(sepAxis, endTime.Add(-s.dataInterval))
+	}
 	s.layers[0].Append(axis, endTime)
 	s.mutex.Unlock()
 
@@ -322,7 +333,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 		return
 	}
 	newMatrix := s.generateMatrix()
-	err := s.reportManage.InsertReport(newMatrix)
+	err := s.reportManage.InsertReport(newMatrix, endTime, s.dataInterval)
 	if err != nil {
 		log.Warn("InsertReport error", zap.Error(err))
 	}
