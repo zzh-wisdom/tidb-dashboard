@@ -86,6 +86,6 @@ func (*averageStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, helper
 	}
 }
 
-func (*averageStrategy) GetAxisCompactStrategy() AxisCompactStrategy {
-	return SumThresholdAxisCompactStrategy
+func (*averageStrategy) GetAxisDivideMode() AxisDivideMode {
+	return SumThresholdAxisDivideMode
 }

@@ -39,25 +39,25 @@ type splitStrategy interface {
 type Strategy interface {
 	splitStrategy
 	decorator.LabelStrategy
-	GetAxisCompactStrategy() AxisCompactStrategy
+	GetAxisDivideMode() AxisDivideMode
 }
 
-type AxisCompactStrategy int
+type AxisDivideMode int
 
 const (
-	SumThresholdAxisCompactStrategy AxisCompactStrategy = 0
-	MaxBorderAxisCompactStrategy    AxisCompactStrategy = 1
-	MaxGradientAxisCompactStrategy  AxisCompactStrategy = 2
+	SumThresholdAxisDivideMode AxisDivideMode = 0
+	MaxBorderAxisDivideMode    AxisDivideMode = 1
+	MaxGradientAxisDivideMode  AxisDivideMode = 2
 )
 
-func (acs AxisCompactStrategy) String() string {
+func (acs AxisDivideMode) String() string {
 	switch acs {
-	case SumThresholdAxisCompactStrategy:
-		return "SumThresholdAxisCompactStrategy"
-	case MaxBorderAxisCompactStrategy:
-		return "MaxBorderAxisCompactStrategy"
-	case MaxGradientAxisCompactStrategy:
-		return "MaxGradientAxisCompactStrategy"
+	case SumThresholdAxisDivideMode:
+		return "SumThresholdAxisDivideMode"
+	case MaxBorderAxisDivideMode:
+		return "MaxBorderAxisDivideMode"
+	case MaxGradientAxisDivideMode:
+		return "MaxGradientAxisDivideMode"
 	default:
 		panic("unreachable")
 	}
@@ -94,9 +94,9 @@ func NewStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, config *StrategyConfig, la
 	case DistanceHeatmapStrategy:
 		return DistanceStrategy(lc, wg, label, config.DistanceStrategyRatio, config.DistanceStrategyLevel, config.distanceStrategyCount)
 	case MaxBorderHeatmapStrategy:
-		return MaximumStrategy(label, MaxBorderAxisCompactStrategy)
+		return MaximumStrategy(label, MaxBorderAxisDivideMode)
 	case MaxGradientHeatmapStrategy:
-		return MaximumStrategy(label, MaxGradientAxisCompactStrategy)
+		return MaximumStrategy(label, MaxGradientAxisDivideMode)
 	default:
 		panic("unreachable")
 	}

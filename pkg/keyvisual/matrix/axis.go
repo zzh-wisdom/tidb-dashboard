@@ -104,7 +104,7 @@ func (axis *Axis) Reduce(strategy Strategy, newKeys []string) Axis {
 			j++
 		}
 
-		if strategy.GetAxisCompactStrategy() == SumThresholdAxisCompactStrategy {
+		if strategy.GetAxisDivideMode() == SumThresholdAxisDivideMode {
 			newValues[j] += value
 		} else {
 			newValues[j] = MaxUint64(newValues[j], value)
@@ -125,8 +125,8 @@ func (axis *Axis) GetFocusRows(strategy Strategy, threshold uint64) (count int) 
 		}
 	}
 
-	switch strategy.GetAxisCompactStrategy() {
-	case SumThresholdAxisCompactStrategy:
+	switch strategy.GetAxisDivideMode() {
+	case SumThresholdAxisDivideMode:
 		for i, value := range axis.Values {
 			if value >= threshold || tempValue >= threshold {
 				generateBucket(i)
@@ -134,7 +134,7 @@ func (axis *Axis) GetFocusRows(strategy Strategy, threshold uint64) (count int) 
 			tempValue += value
 		}
 		generateBucket(len(axis.Values))
-	case MaxBorderAxisCompactStrategy:
+	case MaxBorderAxisDivideMode:
 		for i, value := range axis.Values {
 			if value >= threshold || tempValue >= threshold {
 				generateBucket(i)
@@ -142,7 +142,7 @@ func (axis *Axis) GetFocusRows(strategy Strategy, threshold uint64) (count int) 
 			tempValue = MaxUint64(tempValue, value)
 		}
 		generateBucket(len(axis.Values))
-	case MaxGradientAxisCompactStrategy:
+	case MaxGradientAxisDivideMode:
 		for i, value := range axis.Values {
 			if i != 0 {
 				abs := AbsDifference(value, axis.Values[i-1])
@@ -177,8 +177,8 @@ func (axis *Axis) Focus(strategy Strategy, threshold uint64, ratio int, target i
 			bucket = 0
 		}
 	}
-	switch strategy.GetAxisCompactStrategy() {
-	case SumThresholdAxisCompactStrategy:
+	switch strategy.GetAxisDivideMode() {
+	case SumThresholdAxisDivideMode:
 		for i, value := range axis.Values {
 			if value >= threshold ||
 				bucket >= threshold ||
@@ -189,7 +189,7 @@ func (axis *Axis) Focus(strategy Strategy, threshold uint64, ratio int, target i
 			bucket += value
 		}
 		generateBucket(len(axis.Values))
-	case MaxBorderAxisCompactStrategy:
+	case MaxBorderAxisDivideMode:
 		for i, value := range axis.Values {
 			if value >= threshold ||
 				bucket >= threshold ||
@@ -200,7 +200,7 @@ func (axis *Axis) Focus(strategy Strategy, threshold uint64, ratio int, target i
 			bucket = MaxUint64(bucket, value)
 		}
 		generateBucket(len(axis.Values))
-	case MaxGradientAxisCompactStrategy:
+	case MaxGradientAxisDivideMode:
 		var tempValue uint64 = 0
 
 		for i, value := range axis.Values {
@@ -231,12 +231,12 @@ func (axis *Axis) Divide(strategy Strategy, target int) Axis {
 	}
 	// get upperThreshold
 	var upperThreshold uint64 = 1
-	switch strategy.GetAxisCompactStrategy() {
-	case SumThresholdAxisCompactStrategy:
+	switch strategy.GetAxisDivideMode() {
+	case SumThresholdAxisDivideMode:
 		for _, value := range axis.Values {
 			upperThreshold += value
 		}
-	case MaxBorderAxisCompactStrategy, MaxGradientAxisCompactStrategy:
+	case MaxBorderAxisDivideMode, MaxGradientAxisDivideMode:
 		for _, value := range axis.Values {
 			upperThreshold = MaxUint64(upperThreshold, value)
 		}

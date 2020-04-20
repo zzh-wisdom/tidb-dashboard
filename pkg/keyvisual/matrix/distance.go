@@ -158,8 +158,8 @@ func (s *distanceStrategy) Split(dst, src Axis, tag SplitTag, axesIndex int, hel
 	}
 }
 
-func (*distanceStrategy) GetAxisCompactStrategy() AxisCompactStrategy {
-	return SumThresholdAxisCompactStrategy
+func (*distanceStrategy) GetAxisDivideMode() AxisDivideMode {
+	return SumThresholdAxisDivideMode
 }
 
 // multi-threaded calculate scale matrix.
