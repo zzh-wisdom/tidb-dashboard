@@ -36,9 +36,9 @@ type DbAxis struct {
 }
 
 type DbPlane struct {
-	LayerNum   uint8 `gorm:"column:layer_num"`
-	Time       time.Time
-	AxisEncode []byte
+	LayerNum      uint8 `gorm:"column:layer_num"`
+	Time          time.Time
+	AxisGobEncode []byte
 }
 
 func (DbPlane) TableName() string {
@@ -60,7 +60,7 @@ func NewDbPlane(num uint8, time time.Time, axis DbAxis) (*DbPlane, error) {
 }
 
 func (dp DbPlane) unmarshalDbAxis() (DbAxis, error) {
-	var buf = bytes.NewBuffer(dp.AxisEncode)
+	var buf = bytes.NewBuffer(dp.AxisGobEncode)
 	dec := gob.NewDecoder(buf)
 	var axis DbAxis
 	err := dec.Decode(&axis)

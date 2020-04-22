@@ -59,14 +59,32 @@ var (
 			{Len: 60 / 30 * 24 * 6, Ratio: 4 * 60 / 30}, // step 30 minutes, total 288, 6 days (sum: 1 weeks)
 			{Len: 24 / 4 * 28, Ratio: 0},                // step 4 hours, total 168, 4 weeks (sum: 5 weeks)
 		},
+		//ReportConfig: storage.ReportConfig{
+		//	ReportInterval:    time.Hour,
+		//	ReportTimeRange:   time.Hour,
+		//	ReportMaxDisplayY: 1536,
+		//	MaxReportNum:      10 * 7 * 24, // 10 weeks
+		//},
+		//MaxDelayTime: time.Minute,
+		//DataInterval: time.Minute,
+
 		ReportConfig: storage.ReportConfig{
 			ReportInterval:    time.Second * 10,
 			ReportTimeRange:   time.Second * 10,
 			ReportMaxDisplayY: 1536,
-			MaxReportNum:      5 * 7 * 24 * 60 / 10, // 5 weeks
+			MaxReportNum:      6,
 		},
-		MaxDowntime:  time.Second,
-		DataInterval: time.Second,
+		MaxDelayTime: time.Second,
+		DataInterval: time.Second * 2,
+
+		//ReportConfig: storage.ReportConfig{
+		//	ReportInterval:    time.Minute * 10,
+		//	ReportTimeRange:   time.Minute * 10,
+		//	ReportMaxDisplayY: 1536,
+		//	MaxReportNum:      6,
+		//},
+		//MaxDelayTime: time.Second * 10,
+		//DataInterval: time.Second * 10,
 	}
 )
 

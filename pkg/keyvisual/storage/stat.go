@@ -132,7 +132,7 @@ func (s *layerStat) Reduce() {
 
 	compactAxis := Compact(times, axes, s.Strategy)
 	newAxis := compactAxis.Divide(s.Strategy, preTarget)
-	newAxis.Shrink(uint64(s.Ratio))
+	newAxis.Shrink(s.Strategy, uint64(s.Ratio))
 	s.Next.Append(newAxis, s.StartTime)
 }
 
@@ -208,7 +208,7 @@ func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes
 type StatConfig struct {
 	LayersConfig []LayerConfig
 	ReportConfig
-	MaxDowntime  time.Duration
+	MaxDelayTime time.Duration
 	DataInterval time.Duration
 }
 
@@ -223,7 +223,7 @@ type Stat struct {
 
 	reportManage *ReportManage
 	backUpManage *BackUpManage
-	maxDowntime  time.Duration
+	maxDelayTime time.Duration
 	dataInterval time.Duration
 }
 
@@ -244,7 +244,7 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 		//provider:     provider,
 		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
 		backUpManage: bum,
-		maxDowntime:  cfg.MaxDowntime,
+		maxDelayTime: cfg.MaxDelayTime,
 		dataInterval: cfg.DataInterval,
 	}
 
@@ -265,11 +265,11 @@ func (s *Stat) Restore(startTime time.Time) {
 
 	s.backUpManage.Restore(s, startTime)
 
-	if !startTime.Before(s.getLastestEndTime().Add(s.maxDowntime)) {
-		log.Debug("New Segmentation Axis", zap.Time("EndTime", startTime))
-		sepAxis := CreateSepMemAxis(len(region.Tags))
-		s.layers[0].Append(sepAxis, startTime)
-	}
+	//if !startTime.Before(s.getLastestEndTime().Add(s.maxDelayTime)) {
+	//	log.Debug("New Segmentation Axis", zap.Time("EndTime", startTime))
+	//	sepAxis := CreateSepMemAxis(len(region.Tags))
+	//	s.layers[0].Append(sepAxis, startTime)
+	//}
 
 	s.mutex.Unlock()
 
@@ -279,14 +279,14 @@ func (s *Stat) Restore(startTime time.Time) {
 		log.Panic("restore report error", zap.Error(err))
 	}
 	// log.Debug("", zap.Time("ReportTime", s.reportManage.ReportTime), zap.Time("startTime", startTime))
-	if s.reportManage.IsNeedReport(startTime) {
-		// log.Debug("New Report")
-		newMatrix := s.generateMatrix()
-		err := s.reportManage.InsertReport(newMatrix, startTime, s.dataInterval)
-		if err != nil {
-			log.Warn("InsertReport error", zap.Error(err))
-		}
-	}
+	//if s.reportManage.IsNeedReport(startTime) {
+	//	// log.Debug("New Report")
+	//	newMatrix := s.generateMatrix()
+	//	err := s.reportManage.InsertReport(newMatrix, startTime, s.dataInterval)
+	//	if err != nil {
+	//		log.Warn("InsertReport error", zap.Error(err))
+	//	}
+	//}
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
 }
 
@@ -321,7 +321,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 
 	s.mutex.Lock()
 	//defer s.mutex.Unlock()
-	if !endTime.Before(s.getLastestEndTime().Add(s.dataInterval + s.maxDowntime)) {
+	if !endTime.Before(s.getLastestEndTime().Add(s.dataInterval + s.maxDelayTime)) {
 		log.Debug("New Segmentation Axis", zap.Time("EndTime", endTime))
 		sepAxis := CreateSepMemAxis(len(region.Tags))
 		s.layers[0].Append(sepAxis, endTime.Add(-s.dataInterval))
@@ -337,13 +337,13 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	if err != nil {
 		log.Warn("InsertReport error", zap.Error(err))
 	}
-	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime))
+	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime), zap.Int64("EndTimeUnix", s.reportManage.ReportTime.Unix()))
 }
 
 func (s *Stat) generateMatrix() DbMatrix {
 	reportStartTime := s.reportManage.ReportTime.Add(-s.reportManage.ReportInterval)
 	reportEndTime := s.reportManage.ReportTime
-	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime))
+	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime), zap.Int64("EndTimeUnix", reportEndTime.Unix()))
 
 	matrixes := make([]matrix.Matrix, len(region.Tags))
 	for i, tag := range region.Tags {

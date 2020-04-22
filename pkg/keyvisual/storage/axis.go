@@ -75,7 +75,10 @@ func CreateSepMemAxis(valuesListLen int) MemAxis {
 }
 
 // Shrink reduces all statistical values.
-func (axis *MemAxis) Shrink(ratio uint64) {
+func (axis *MemAxis) Shrink(strategy matrix.Strategy, ratio uint64) {
+	if strategy.GetAxisDivideMode() != matrix.SumThresholdAxisDivideMode {
+		return
+	}
 	for _, values := range axis.ValuesList {
 		for i := range values {
 			values[i] /= ratio

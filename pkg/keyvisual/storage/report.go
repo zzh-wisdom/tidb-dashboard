@@ -60,9 +60,9 @@ func (d DbMatrix) GetTagMatrix(tag region.StatTag) matrix.Matrix {
 }
 
 type Report struct {
-	StartTime    time.Time `gorm:"column:start_time"`
-	EndTime      time.Time `gorm:"column:end_time;primary_key"`
-	MatrixEncode []byte    `gorm:"column:matrix"`
+	StartTime       time.Time `gorm:"column:start_time"`
+	EndTime         time.Time `gorm:"column:end_time;primary_key"`
+	MatrixGobEncode []byte    `gorm:"column:matrix"`
 }
 
 func (Report) TableName() string {
@@ -77,9 +77,9 @@ func NewReport(startTime, endTime time.Time, matrix DbMatrix) (*Report, error) {
 		return nil, err
 	}
 	return &Report{
-		StartTime:    startTime,
-		EndTime:      endTime,
-		MatrixEncode: buf.Bytes(),
+		StartTime:       startTime,
+		EndTime:         endTime,
+		MatrixGobEncode: buf.Bytes(),
 	}, nil
 }
 
@@ -256,7 +256,7 @@ func (r *ReportManage) FindReport(endTime time.Time) (matrix DbMatrix, isFind bo
 		return
 	}
 	isFind = true
-	var buf = bytes.NewBuffer(report.MatrixEncode)
+	var buf = bytes.NewBuffer(report.MatrixGobEncode)
 	dec := gob.NewDecoder(buf)
 	err = dec.Decode(&matrix)
 	return
