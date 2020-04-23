@@ -191,6 +191,7 @@ func (s *Service) Stop(ctx context.Context) error {
 // @Param starttime query int false "The start of the time range (Unix)"
 // @Param endtime query int false "The end of the time range (Unix)"
 // @Param type query string false "Main types of data" Enums(written_bytes, read_bytes, written_keys, read_keys, integration)
+// @Param way query string false "The way of heatmap generation" Enums(matrix, report)
 // @Success 200 {object} matrix.Matrix
 // @Router /keyvisual/heatmaps [get]
 // @Security JwtAuth
@@ -201,6 +202,7 @@ func (s *Service) heatmaps(c *gin.Context) {
 	startTimeString := c.Query("starttime")
 	endTimeString := c.Query("endtime")
 	typ := c.Query("type")
+	way := c.Query("way")
 
 	endTime := time.Now()
 	startTime := endTime.Add(-360 * time.Minute)
@@ -250,27 +252,32 @@ func (s *Service) heatmaps(c *gin.Context) {
 
 	baseTag := region.IntoTag(typ)
 
-	// report test
+	// TODO: for report test, which needs to be deleted later.
 	if endKey != "" || startKey != "" {
 		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey, baseTag)
 		if isFind {
-			//resp.DataMap = map[string][][]uint64{
-			//	typ: resp.DataMap[typ],
-			//}
 			c.JSON(http.StatusOK, resp)
 			return
 		}
 	}
 
-	plane := s.stat.Range(startTime, endTime, startKey, endKey, baseTag)
-	resp := plane.Pixel(s.strategy, heatmapsMaxDisplayY, baseTag.String())
-	resp.RangeKey(startKey, endKey)
-	// TODO: An expedient to reduce data transmission, which needs to be deleted later.
-	//resp.DataMap = map[string][][]uint64{
-	//	typ: resp.DataMap[typ],
-	//}
-	// ----------
-	c.JSON(http.StatusOK, resp)
+	if way == "report" {
+		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey, baseTag)
+		if isFind {
+			c.JSON(http.StatusOK, resp)
+		}
+		// TODO: deal with the case when finding no report
+	} else {
+		plane := s.stat.Range(startTime, endTime, startKey, endKey, baseTag)
+		resp := plane.Pixel(s.strategy, heatmapsMaxDisplayY, baseTag.String())
+		resp.RangeKey(startKey, endKey)
+		// TODO: An expedient to reduce data transmission, which needs to be deleted later.
+		//resp.DataMap = map[string][][]uint64{
+		//	typ: resp.DataMap[typ],
+		//}
+		// ----------
+		c.JSON(http.StatusOK, resp)
+	}
 }
 
 func (s *Service) provideLocals() (*config.Config, *region.PDDataProvider, *http.Client, *dbstore.DB) {
