@@ -15,6 +15,7 @@ package input
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -25,14 +26,16 @@ import (
 )
 
 type fileInput struct {
+	Path      string
 	StartTime time.Time
 	EndTime   time.Time
 	Now       time.Time
 }
 
 // FileInput reads files in the specified time range from the ./data directory.
-func FileInput(startTime, endTime time.Time) StatInput {
+func FileInput(path string, startTime, endTime time.Time) StatInput {
 	return &fileInput{
+		Path:      path,
 		StartTime: startTime,
 		EndTime:   endTime,
 		Now:       time.Now(),
@@ -47,8 +50,8 @@ func (input *fileInput) Background(ctx context.Context, stat *storage.Stat) {
 	log.Info("keyvisual load files from", zap.Time("start-time", input.StartTime))
 	fileTime := input.StartTime
 	for !fileTime.After(input.EndTime) {
-		regions, err := readFile(fileTime)
-		fileTime = fileTime.Add(time.Minute)
+		regions, err := readFile(input.Path, fileTime)
+		fileTime = fileTime.Add(stat.GetDataInterval())
 		if err == nil {
 			stat.Append(regions, input.Now.Add(fileTime.Sub(input.EndTime)))
 		}
@@ -56,9 +59,11 @@ func (input *fileInput) Background(ctx context.Context, stat *storage.Stat) {
 	log.Info("keyvisual load files to", zap.Time("end-time", input.EndTime))
 }
 
-func readFile(fileTime time.Time) (*RegionsInfo, error) {
-	fileName := fileTime.Format("./data/20060102-15-04.json")
-	file, err := os.Open(fileName)
+func readFile(path string, fileTime time.Time) (*RegionsInfo, error) {
+	fileName := fileTime.Format("20060102-15-04-05.json")
+	filePath := fmt.Sprintf("%s/%s", path, fileName)
+	//log.Debug("",zap.String("filename", filePath))
+	file, err := os.Open(filePath)
 	if err == nil {
 		return read(file)
 	}

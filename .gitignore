@@ -1,5 +1,6 @@
 .env
 /bin
+/data
 /vendor
 
 # Binaries for programs and plugins

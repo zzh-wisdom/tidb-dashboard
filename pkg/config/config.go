@@ -15,11 +15,14 @@ package config
 
 import (
 	"crypto/tls"
+	"time"
 )
 
 type Config struct {
-	DataDir    string
-	PDEndPoint string
+	DataDir      string
+	PDEndPoint   string
+	DataInterval time.Duration
+	MaxDataDelay time.Duration
 
 	StatInputMode       int
 	HeatmapStrategyMode int

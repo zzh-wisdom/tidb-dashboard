@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	heatmapsMaxDisplayY = 200 //1536
+	heatmapsMaxDisplayY = 1536 //200
 
 	distanceStrategyRatio = 1.0 / math.Phi
 	distanceStrategyLevel = 15
@@ -59,23 +59,19 @@ var (
 			{Len: 60 / 30 * 24 * 6, Ratio: 4 * 60 / 30}, // step 30 minutes, total 288, 6 days (sum: 1 weeks)
 			{Len: 24 / 4 * 28, Ratio: 0},                // step 4 hours, total 168, 4 weeks (sum: 5 weeks)
 		},
-		//ReportConfig: storage.ReportConfig{
-		//	ReportInterval:    time.Hour,
-		//	ReportTimeRange:   time.Hour,
-		//	ReportMaxDisplayY: 1536,
-		//	MaxReportNum:      10 * 7 * 24, // 10 weeks
-		//},
-		//MaxDelayTime: time.Minute,
-		//DataInterval: time.Minute,
-
 		ReportConfig: storage.ReportConfig{
-			ReportInterval:    time.Second * 10,
-			ReportTimeRange:   time.Second * 10,
+			ReportInterval:    time.Hour,
+			ReportTimeRange:   time.Hour,
 			ReportMaxDisplayY: 1536,
-			MaxReportNum:      6,
+			MaxReportNum:      10 * 7 * 24, // 10 weeks
 		},
-		MaxDelayTime: time.Second,
-		DataInterval: time.Second * 2,
+
+		//ReportConfig: storage.ReportConfig{
+		//	ReportInterval:    time.Second * 10,
+		//	ReportTimeRange:   time.Second * 10,
+		//	ReportMaxDisplayY: 1536,
+		//	MaxReportNum:      6,
+		//},
 
 		//ReportConfig: storage.ReportConfig{
 		//	ReportInterval:    time.Minute * 10,
@@ -83,8 +79,6 @@ var (
 		//	ReportMaxDisplayY: 1536,
 		//	MaxReportNum:      6,
 		//},
-		//MaxDelayTime: time.Second * 10,
-		//DataInterval: time.Second * 10,
 	}
 )
 
@@ -304,8 +298,10 @@ func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, labelS
 func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
 	statInputMode := input.StatInputMode(cfg.StatInputMode)
 	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
-	isOpenBackUp := statInputMode == input.PeriodicInputMode
-	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isOpenBackUp, db)
+	isFileInputMode := statInputMode == input.FileInputMode
+	defaultStatConfig.DataInterval = cfg.DataInterval
+	defaultStatConfig.MaxDelayTime = cfg.MaxDataDelay
+	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isFileInputMode, db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

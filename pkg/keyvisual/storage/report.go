@@ -261,3 +261,11 @@ func (r *ReportManage) FindReport(endTime time.Time) (matrix DbMatrix, isFind bo
 	err = dec.Decode(&matrix)
 	return
 }
+
+func (r *ReportManage) clean() {
+	// clear table Plane
+	err := ClearTable(r.Db, &Report{})
+	if err != nil {
+		log.Fatal("Clear table report error", zap.Error(err))
+	}
+}

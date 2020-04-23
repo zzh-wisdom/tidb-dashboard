@@ -75,22 +75,24 @@ run_p_mg:
 	bin/tidb-dashboard --debug --matrix-strategy-mode 3
 
 
-run_f_d:
-	cd bin &&\
-	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800
+run_fs_d:
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m
 
-run_f_a:
-	cd bin &&\
-	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --matrix-strategy-mode 1
+run_fs_a:
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m --matrix-strategy-mode 1
 
-run_f_mb:
-	cd bin &&\
-	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --matrix-strategy-mode 2
+run_fs_mb:
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m --matrix-strategy-mode 2
 
-run_f_mg:
-	cd bin &&\
-	./tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --matrix-strategy-mode 3
+run_fs_mg:
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m --matrix-strategy-mode 3
 
 all:
 	make ui &&\
 	make all_server
+
+getter:
+	go build -o bin/get-regionsinfo cmd/get-regionsinfo/main.go
+
+run_getter:
+	./bin/get-regionsinfo --dir regions-default --interval 1s

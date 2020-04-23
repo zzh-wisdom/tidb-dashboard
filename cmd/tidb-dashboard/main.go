@@ -35,6 +35,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/pingcap/log"
 	flag "github.com/spf13/pflag"
@@ -60,6 +61,7 @@ type DashboardCLIConfig struct {
 	// key-visual file mode for debug
 	KVFileStartTime int64
 	KVFileEndTime   int64
+	KVFilePath      string
 }
 
 // NewCLIConfig generates the configuration of the dashboard in standalone mode.
@@ -74,10 +76,13 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.IntVar(&cfg.ListenPort, "port", 12333, "The listen port of the Dashboard Server")
 	flag.StringVar(&cfg.CoreConfig.DataDir, "data-dir", "/tmp/dashboard-data", "Path to the Dashboard Server data directory")
 	flag.StringVar(&cfg.CoreConfig.PDEndPoint, "pd", "http://127.0.0.1:2379", "The PD endpoint that Dashboard Server connects to")
+	flag.DurationVar(&cfg.CoreConfig.DataInterval, "data-interval", time.Minute, "The interval between each time getting data from PD")
+	flag.DurationVar(&cfg.CoreConfig.MaxDataDelay, "max-data-delay", time.Minute, "The max delay time between each regionsinfo data")
 	flag.BoolVar(&cfg.EnableDebugLog, "debug", false, "Enable debug logs")
 	// debug for keyvisual，hide help information
 	flag.Int64Var(&cfg.KVFileStartTime, "keyviz-file-start", 0, "(debug) start time for file range in file mode")
 	flag.Int64Var(&cfg.KVFileEndTime, "keyviz-file-end", 0, "(debug) end time for file range in file mode")
+	flag.StringVar(&cfg.KVFilePath, "keyviz-file-path", "./data/regions-standard-append", "(debug) path for data file in file mode")
 	// lab for keyvisual，hide help information
 	flag.IntVar(&cfg.CoreConfig.HeatmapStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
 
@@ -91,6 +96,8 @@ func NewCLIConfig() *DashboardCLIConfig {
 
 	_ = flag.CommandLine.MarkHidden("keyviz-file-start")
 	_ = flag.CommandLine.MarkHidden("keyviz-file-end")
+	_ = flag.CommandLine.MarkHidden("keyviz-file-path")
+	_ = flag.CommandLine.MarkHidden("matrix-strategy-mode")
 
 	flag.Parse()
 
@@ -195,6 +202,7 @@ func main() {
 			return &keyvisualregion.PDDataProvider{
 				FileStartTime:  cliConfig.KVFileStartTime,
 				FileEndTime:    cliConfig.KVFileEndTime,
+				FilePath:       cliConfig.KVFilePath,
 				PeriodicGetter: keyvisualinput.NewAPIPeriodicGetter(cliConfig.CoreConfig.PDEndPoint, httpClient),
 				EtcdClient:     etcdClient,
 			}

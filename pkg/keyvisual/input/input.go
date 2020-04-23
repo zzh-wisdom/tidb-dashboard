@@ -34,7 +34,7 @@ func NewStatInput(provider *region.PDDataProvider) StatInput {
 	}
 	startTime := time.Unix(provider.FileStartTime, 0)
 	endTime := time.Unix(provider.FileEndTime, 0)
-	return FileInput(startTime, endTime)
+	return FileInput(provider.FilePath, startTime, endTime)
 }
 
 type StatInputMode int

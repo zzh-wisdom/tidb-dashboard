@@ -46,11 +46,13 @@ func (plane *Plane) Compact(strategy Strategy) (Axis, interface{}) {
 	// get compact Axis keys
 	keySet := make(map[string]struct{})
 	unlimitedEnd := false
+	var unlimitedEndKey string
 	for _, axis := range plane.Axes {
 		end := len(axis.Keys) - 1
 		endKey := axis.Keys[end]
 		if endKey == "" {
 			unlimitedEnd = true
+			unlimitedEndKey = endKey
 		} else {
 			keySet[endKey] = struct{}{}
 		}
@@ -59,11 +61,9 @@ func (plane *Plane) Compact(strategy Strategy) (Axis, interface{}) {
 		}
 	}
 
-	var compactKeys []string
+	compactKeys := MakeKeys(keySet)
 	if unlimitedEnd {
-		compactKeys = MakeKeysWithUnlimitedEnd(keySet)
-	} else {
-		compactKeys = MakeKeys(keySet)
+		compactKeys = append(compactKeys, unlimitedEndKey)
 	}
 	compactAxis := CreateZeroAxis(compactKeys)
 

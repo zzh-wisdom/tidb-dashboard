@@ -78,9 +78,7 @@ func newLayerStat(num uint8, conf LayerConfig, strategy matrix.Strategy, startTi
 func (s *layerStat) Reduce() {
 	if s.Ratio == 0 || s.Next == nil {
 		err := s.BUM.DeleteDbPlane(s.Num, s.StartTime, s.RingAxes[s.Head])
-		if s.BUM.IsOpen {
-			log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
-		}
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
 		s.RingAxes[s.Head] = MemAxis{}
@@ -115,9 +113,7 @@ func (s *layerStat) Reduce() {
 			break
 		}
 		err := s.BUM.DeleteDbPlane(s.Num, s.StartTime, s.RingAxes[s.Head])
-		if s.BUM.IsOpen {
-			log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
-		}
+		log.Debug("Delete Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Head), zap.Time("Time", s.StartTime), zap.Error(err))
 
 		s.StartTime = s.RingTimes[s.Head]
 		times = append(times, s.StartTime)
@@ -143,9 +139,7 @@ func (s *layerStat) Append(axis MemAxis, endTime time.Time) {
 	}
 
 	err := s.BUM.InsertDbPlane(s.Num, endTime, axis)
-	if s.BUM.IsOpen {
-		log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
-	}
+	log.Debug("Insert Plane", zap.Uint8("Num", s.Num), zap.Int("Location", s.Tail), zap.Time("Time", endTime), zap.Error(err))
 
 	s.RingAxes[s.Tail] = axis
 	s.RingTimes[s.Tail] = endTime
@@ -221,16 +215,17 @@ type Stat struct {
 
 	// provider *region.PDDataProvider
 
-	reportManage *ReportManage
-	backUpManage *BackUpManage
-	maxDelayTime time.Duration
-	dataInterval time.Duration
+	reportManage    *ReportManage
+	backUpManage    *BackUpManage
+	maxDelayTime    time.Duration
+	dataInterval    time.Duration
+	isFileInputMode bool
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, isOpenBackUp bool, db *dbstore.DB) *Stat {
+func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, isFileInputMode bool, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
-	bum := NewBackUpManage(db, isOpenBackUp)
+	bum := NewBackUpManage(db)
 
 	for i, c := range cfg.LayersConfig {
 		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, bum)
@@ -242,10 +237,11 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 		layers:   layers,
 		strategy: strategy,
 		//provider:     provider,
-		reportManage: NewReportManage(db, startTime, cfg.ReportConfig),
-		backUpManage: bum,
-		maxDelayTime: cfg.MaxDelayTime,
-		dataInterval: cfg.DataInterval,
+		reportManage:    NewReportManage(db, startTime, cfg.ReportConfig),
+		backUpManage:    bum,
+		maxDelayTime:    cfg.MaxDelayTime,
+		dataInterval:    cfg.DataInterval,
+		isFileInputMode: isFileInputMode,
 	}
 
 	lc.Append(fx.Hook{
@@ -260,6 +256,11 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 
 // Restore data from disk the first time service starts
 func (s *Stat) Restore(startTime time.Time) {
+	if s.isFileInputMode {
+		s.backUpManage.clean()
+		s.reportManage.clean()
+		return
+	}
 	log.Debug("keyviz: restore data from dbstore")
 	s.mutex.Lock()
 
@@ -345,6 +346,10 @@ func (s *Stat) generateMatrix() DbMatrix {
 	reportEndTime := s.reportManage.ReportTime
 	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime), zap.Int64("EndTimeUnix", reportEndTime.Unix()))
 
+	//startKey := ""
+	//endKey := ""
+	//s.backUpManage.InternKey(&startKey)
+	//s.backUpManage.InternKey(&endKey)
 	matrixes := make([]matrix.Matrix, len(region.Tags))
 	for i, tag := range region.Tags {
 		plane := s.Range(reportStartTime, reportEndTime, "", "", tag)

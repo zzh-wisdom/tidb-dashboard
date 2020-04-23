@@ -42,6 +42,7 @@ type tidbLabelStrategy struct {
 
 	TableMap    sync.Map
 	TidbAddress []string
+	Interval    time.Duration
 }
 
 // TiDBLabelStrategy implements the LabelStrategy interface. Get Label Information from TiDB.
@@ -50,6 +51,7 @@ func TiDBLabelStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, 
 		Config:     cfg,
 		Provider:   provider,
 		HTTPClient: httpClient,
+		Interval:   cfg.DataInterval,
 	}
 
 	lc.Append(fx.Hook{
@@ -67,7 +69,7 @@ func TiDBLabelStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, 
 }
 
 func (s *tidbLabelStrategy) Background(ctx context.Context) {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()
 	for {
 		select {

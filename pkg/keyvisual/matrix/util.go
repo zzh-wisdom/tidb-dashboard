@@ -81,10 +81,10 @@ func MakeKeys(keySet map[string]struct{}) []string {
 
 // MakeKeysWithUnlimitedEnd uses a key set to build a new Key-Axis, then add a "" to the keys, indicating that the last
 // bucket has an unlimited end.
-func MakeKeysWithUnlimitedEnd(keySet map[string]struct{}) []string {
-	keys := MakeKeys(keySet)
-	return append(keys, "")
-}
+//func MakeKeysWithUnlimitedEnd(keySet map[string]struct{}) []string {
+//	keys := MakeKeys(keySet)
+//	return append(keys, "")
+//}
 
 // KeysRange finds a range that intersects [startKey, endKey) in keys.
 func KeysRange(keys []string, startKey string, endKey string) (start, end int, ok bool) {
@@ -125,7 +125,6 @@ func KeysRange(keys []string, startKey string, endKey string) (start, end int, o
 			end++
 		}
 	}
-
 	return start, end, true
 }
 

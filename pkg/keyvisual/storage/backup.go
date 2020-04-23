@@ -82,15 +82,13 @@ func newKeyCount(key string) *keyCount {
 type BackUpManage struct {
 	Db *dbstore.DB
 	sync.Map
-
-	IsOpen bool
 }
 
-func NewBackUpManage(db *dbstore.DB, isOpen bool) *BackUpManage {
+func NewBackUpManage(db *dbstore.DB) *BackUpManage {
 	return &BackUpManage{
-		Db:     db,
-		Map:    sync.Map{},
-		IsOpen: isOpen,
+		Db:  db,
+		Map: sync.Map{},
+		//IsOpen: isOpen,
 	}
 }
 
@@ -99,9 +97,9 @@ func (b *BackUpManage) InsertDbPlane(num uint8, time time.Time, axis MemAxis) er
 	if err != nil {
 		return err
 	}
-	if !b.IsOpen {
-		return nil
-	}
+	//if !b.IsOpen {
+	//	return nil
+	//}
 
 	newAxis := DbAxis{
 		KeysList:   make([][]uint64, len(axis.KeysList)),
@@ -144,9 +142,9 @@ func (b *BackUpManage) SaveKeys(keysList [][]string) error {
 }
 
 func (b *BackUpManage) storeKey(key string) error {
-	if !b.IsOpen {
-		return nil
-	}
+	//if !b.IsOpen {
+	//	return nil
+	//}
 	id := getKeyID(key)
 	return b.Db.Create(&KeyIntern{ID: id, Key: key}).Error
 }
@@ -156,9 +154,9 @@ func (b *BackUpManage) DeleteDbPlane(num uint8, time time.Time, axis MemAxis) er
 	if err != nil {
 		return err
 	}
-	if !b.IsOpen {
-		return nil
-	}
+	//if !b.IsOpen {
+	//	return nil
+	//}
 	return b.Db.
 		Where("layer_num = ? AND time = ?", num, time).
 		Delete(&DbPlane{}).
@@ -187,9 +185,9 @@ func (b *BackUpManage) DeletKeys(keysList [][]string) error {
 }
 
 func (b *BackUpManage) eraseKey(keys []string) error {
-	if !b.IsOpen {
-		return nil
-	}
+	//if !b.IsOpen {
+	//	return nil
+	//}
 	IDs := make([]uint64, len(keys))
 	for i, key := range keys {
 		IDs[i] = getKeyID(key)
@@ -199,9 +197,9 @@ func (b *BackUpManage) eraseKey(keys []string) error {
 
 // Restore restore all data from db
 func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
-	if !b.IsOpen {
-		return
-	}
+	//if !b.IsOpen {
+	//	return
+	//}
 	layerCount := len(stat.layers)
 	// establish start `Plane` for each layer
 	createStartDbPlanes := func() {
@@ -298,16 +296,7 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 		memAxesList = append(memAxesList, axes)
 	}
 
-	// clear table Plane
-	err = ClearTable(b.Db, &DbPlane{})
-	if err != nil {
-		log.Fatal("Clear table plane error", zap.Error(err))
-	}
-	// clear table KeyIntern
-	err = ClearTable(b.Db, &KeyIntern{})
-	if err != nil {
-		log.Fatal("Clear table KeyIntern error", zap.Error(err))
-	}
+	b.clean()
 	for num := range memAxesList {
 		for i, axis := range memAxesList[num] {
 			err := b.InsertDbPlane(uint8(num), timesList[num][i], axis)
@@ -318,10 +307,23 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 	}
 }
 
-func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err error) {
-	if !b.IsOpen {
-		return nil, nil
+func (b *BackUpManage) clean() {
+	// clear table Plane
+	err := ClearTable(b.Db, &DbPlane{})
+	if err != nil {
+		log.Fatal("Clear table plane error", zap.Error(err))
 	}
+	// clear table KeyIntern
+	err = ClearTable(b.Db, &KeyIntern{})
+	if err != nil {
+		log.Fatal("Clear table KeyIntern error", zap.Error(err))
+	}
+}
+
+func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err error) {
+	//if !b.IsOpen {
+	//	return nil, nil
+	//}
 	var keyInterns []KeyIntern
 	err = b.Db.Find(&keyInterns).Error
 	if err != nil {
@@ -347,9 +349,9 @@ func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err erro
 }
 
 func (b *BackUpManage) findDbPlaneOrderByTime(num uint8) ([]DbPlane, error) {
-	if !b.IsOpen {
-		return nil, nil
-	}
+	//if !b.IsOpen {
+	//	return nil, nil
+	//}
 	var planes []DbPlane
 	err := b.Db.
 		Where("layer_num = ?", num).

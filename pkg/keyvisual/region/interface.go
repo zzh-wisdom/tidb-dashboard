@@ -29,6 +29,7 @@ type PDDataProvider struct {
 	// File mode (debug)
 	FileStartTime int64
 	FileEndTime   int64
+	FilePath      string
 	// API or Core mode
 	// This item takes effect only when both FileStartTime and FileEndTime are 0.
 	PeriodicGetter RegionsInfoGenerator
