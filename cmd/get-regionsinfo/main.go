@@ -152,5 +152,4 @@ func main() {
 			startTime = startTime.Add(*Interval)
 		}
 	}
-
 }

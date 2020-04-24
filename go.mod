@@ -11,7 +11,11 @@ require (
 	github.com/gin-gonic/gin v1.5.0
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/go-sql-driver/mysql v1.4.1
+	github.com/goccy/go-graphviz v0.0.5
+	github.com/google/pprof v0.0.0-20200407044318-7d83b28da2e9
+	github.com/google/uuid v1.0.0
 	github.com/gtank/cryptopasta v0.0.0-20170601214702-1f550f6f2f69
+	github.com/hypnoglow/gormzap v0.3.0
 	github.com/jinzhu/gorm v1.9.12
 	github.com/joho/godotenv v1.3.0
 	github.com/joomcode/errorx v1.0.1
@@ -31,3 +35,5 @@ require (
 	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
 	google.golang.org/grpc v1.25.1
 )
+
+replace github.com/swaggo/swag => github.com/breeswish/swag v1.6.6-0.20200420031958-719cfd8cfce1
