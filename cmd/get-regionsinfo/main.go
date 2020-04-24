@@ -19,12 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
-const AllFilePath = "./data"
+const AllFilePath = "./bin/regionsinfo"
 
 var (
 	PDEndPoint = flag.String("pd", "http://127.0.0.1:2379", "PD endpoint")
 	Interval   = flag.Duration("interval", time.Minute, "Interval to collect metrics")
-	Dir        = flag.String("dir", "", "the folder in ./data where saving regionsInfo")
+	Dir        = flag.String("dir", "", "the folder in ./bin/regionsinfo where saving regionsInfo")
 )
 
 type InfoUnit struct {
@@ -69,7 +69,7 @@ func dataWrite(wg *sync.WaitGroup, ch chan *InfoUnit) {
 		_, _ = file.Write(buf)
 		file.Close()
 	}
-	readMeFile := fmt.Sprintf("%s/%s/readme.txt", AllFilePath, *Dir)
+	readMeFile := fmt.Sprintf("%s/%s/0readme.txt", AllFilePath, *Dir)
 	file, err := os.Create(readMeFile)
 	if err != nil {
 		panic(fmt.Sprintf("Create file %s err %s", readMeFile, err.Error()))

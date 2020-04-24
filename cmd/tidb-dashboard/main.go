@@ -83,7 +83,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	// debug for keyvisual，hide help information
 	flag.Int64Var(&cfg.KVFileStartTime, "keyviz-file-start", 0, "(debug) start time for file range in file mode")
 	flag.Int64Var(&cfg.KVFileEndTime, "keyviz-file-end", 0, "(debug) end time for file range in file mode")
-	flag.StringVar(&cfg.KVFilePath, "keyviz-file-path", "./data/regions-standard-append", "(debug) path for data file in file mode")
+	flag.StringVar(&cfg.KVFilePath, "keyviz-file-path", "./bin/regionsinfo/regions-standard-append", "(debug) path for data file in file mode")
 	// lab for keyvisual，hide help information
 	flag.IntVar(&cfg.CoreConfig.HeatmapStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
 
