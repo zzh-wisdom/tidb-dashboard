@@ -61,16 +61,19 @@ run_p_mg:
 
 
 run_fs_d:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m
 
 run_fs_a:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m --matrix-strategy-mode 1
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 1
 
 run_fs_mb:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m --matrix-strategy-mode 2
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 2
 
 run_fs_mg:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --max-data-delay 10m --matrix-strategy-mode 3
+	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 3
+
+run_s_d:
+	./bin/tidb-dashboard --debug --keyviz-input-mode 2 --max-data-delay 10m
 
 all:
 	make ui &&\

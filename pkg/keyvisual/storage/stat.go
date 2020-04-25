@@ -215,15 +215,15 @@ type Stat struct {
 
 	// provider *region.PDDataProvider
 
-	reportManage    *ReportManage
-	backUpManage    *BackUpManage
-	maxDelayTime    time.Duration
-	dataInterval    time.Duration
-	isFileInputMode bool
+	reportManage        *ReportManage
+	backUpManage        *BackUpManage
+	maxDelayTime        time.Duration
+	dataInterval        time.Duration
+	isPeriodicInputMode bool
 }
 
 // NewStat generates a Stat based on the configuration.
-func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, isFileInputMode bool, db *dbstore.DB) *Stat {
+func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, isPeriodicInputMode bool, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
 	bum := NewBackUpManage(db)
 
@@ -237,11 +237,11 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 		layers:   layers,
 		strategy: strategy,
 		//provider:     provider,
-		reportManage:    NewReportManage(db, startTime, cfg.ReportConfig),
-		backUpManage:    bum,
-		maxDelayTime:    cfg.MaxDelayTime,
-		dataInterval:    cfg.DataInterval,
-		isFileInputMode: isFileInputMode,
+		reportManage:        NewReportManage(db, startTime, cfg.ReportConfig),
+		backUpManage:        bum,
+		maxDelayTime:        cfg.MaxDelayTime,
+		dataInterval:        cfg.DataInterval,
+		isPeriodicInputMode: isPeriodicInputMode,
 	}
 
 	lc.Append(fx.Hook{
@@ -256,7 +256,7 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 
 // Restore data from disk the first time service starts
 func (s *Stat) Restore(startTime time.Time) {
-	if s.isFileInputMode {
+	if !s.isPeriodicInputMode {
 		s.backUpManage.clean()
 		s.reportManage.clean()
 		return
@@ -339,6 +339,22 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 		log.Warn("InsertReport error", zap.Error(err))
 	}
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime), zap.Int64("EndTimeUnix", s.reportManage.ReportTime.Unix()))
+}
+
+func (s *Stat) FillData(regions region.RegionsInfo, endTime time.Time) {
+	if regions.Len() == 0 {
+		return
+	}
+	axis := CreateStorageAxisFromRegions(regions, s.strategy)
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	for i := len(s.layers) - 1; i >= 0; i-- {
+		if s.layers[i].Head != s.layers[i].Tail || s.layers[i].Empty {
+			s.layers[i].Append(axis, endTime)
+			return
+		}
+	}
 }
 
 func (s *Stat) generateMatrix() DbMatrix {

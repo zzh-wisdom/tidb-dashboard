@@ -63,6 +63,7 @@ type DashboardCLIConfig struct {
 	KVFileStartTime int64
 	KVFileEndTime   int64
 	KVFilePath      string
+	KVInputMode     int
 }
 
 // NewCLIConfig generates the configuration of the dashboard in standalone mode.
@@ -84,6 +85,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.Int64Var(&cfg.KVFileStartTime, "keyviz-file-start", 0, "(debug) start time for file range in file mode")
 	flag.Int64Var(&cfg.KVFileEndTime, "keyviz-file-end", 0, "(debug) end time for file range in file mode")
 	flag.StringVar(&cfg.KVFilePath, "keyviz-file-path", "./bin/regionsinfo/regions-standard-append", "(debug) path for data file in file mode")
+	flag.IntVar(&cfg.KVInputMode, "keyviz-input-mode", 0, "(debug) The mode of getting regionsinfo")
 	// lab for keyvisual，hide help information
 	flag.IntVar(&cfg.CoreConfig.HeatmapStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
 
@@ -138,14 +140,14 @@ func NewCLIConfig() *DashboardCLIConfig {
 	endTime := cfg.KVFileEndTime
 	if startTime != 0 || endTime != 0 {
 		// file mode (debug)
-		cfg.CoreConfig.StatInputMode = int(keyvisualinput.FileInputMode)
+		if cfg.KVInputMode != int(keyvisualinput.FileInputMode) {
+			panic("The parameter of input mode error")
+		}
 		if startTime == 0 || endTime == 0 || startTime >= endTime {
 			panic("keyviz-file-start must be smaller than keyviz-file-end, and none of them are 0")
 		}
-	} else {
-		// periodic mode (default)
-		cfg.CoreConfig.StatInputMode = int(keyvisualinput.PeriodicInputMode)
 	}
+	cfg.CoreConfig.StatInputMode = cfg.KVInputMode
 
 	return cfg
 }
@@ -204,6 +206,7 @@ func main() {
 				FileStartTime:  cliConfig.KVFileStartTime,
 				FileEndTime:    cliConfig.KVFileEndTime,
 				FilePath:       cliConfig.KVFilePath,
+				InputMode:      cliConfig.KVInputMode,
 				PeriodicGetter: keyvisualinput.NewAPIPeriodicGetter(cliConfig.CoreConfig.PDEndPoint, httpClient),
 				EtcdClient:     etcdClient,
 			}

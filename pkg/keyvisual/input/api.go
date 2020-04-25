@@ -49,10 +49,9 @@ func (rs *RegionsInfo) Len() int {
 
 func (rs *RegionsInfo) GetKeys() []string {
 	keys := make([]string, rs.Count+1)
-	keys[0] = rs.Regions[0].StartKey
-	endKeys := keys[1:]
+	keys[rs.Count] = rs.Regions[rs.Count-1].EndKey
 	for i, region := range rs.Regions {
-		endKeys[i] = region.EndKey
+		keys[i] = region.StartKey
 	}
 	return keys
 }

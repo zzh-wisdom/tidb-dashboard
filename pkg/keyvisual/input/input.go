@@ -29,12 +29,19 @@ type StatInput interface {
 }
 
 func NewStatInput(provider *region.PDDataProvider) StatInput {
-	if provider.FileStartTime == 0 && provider.FileEndTime == 0 {
+	inputMode := StatInputMode(provider.InputMode)
+	switch inputMode {
+	case PeriodicInputMode:
 		return PeriodicInput(provider.PeriodicGetter)
+	case FileInputMode:
+		startTime := time.Unix(provider.FileStartTime, 0)
+		endTime := time.Unix(provider.FileEndTime, 0)
+		return FileInput(provider.FilePath, startTime, endTime)
+	case SimulationMode:
+		return NewSimulationDB(1, 10000000)
+	default:
+		panic("unreachable")
 	}
-	startTime := time.Unix(provider.FileStartTime, 0)
-	endTime := time.Unix(provider.FileEndTime, 0)
-	return FileInput(provider.FilePath, startTime, endTime)
 }
 
 type StatInputMode int
@@ -42,6 +49,7 @@ type StatInputMode int
 const (
 	PeriodicInputMode StatInputMode = 0
 	FileInputMode     StatInputMode = 1
+	SimulationMode    StatInputMode = 2
 )
 
 func (s StatInputMode) String() string {
@@ -50,6 +58,8 @@ func (s StatInputMode) String() string {
 		return "PeriodicInputMode"
 	case FileInputMode:
 		return "FileInputMode"
+	case SimulationMode:
+		return "SimulationMode"
 	default:
 		panic("unreachable")
 	}

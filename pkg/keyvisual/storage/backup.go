@@ -309,15 +309,15 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 
 func (b *BackUpManage) clean() {
 	// clear table Plane
-	err := ClearTable(b.Db, &DbPlane{})
-	if err != nil {
-		log.Fatal("Clear table plane error", zap.Error(err))
-	}
+	_ = ClearTable(b.Db, &DbPlane{})
+	//if err != nil {
+	//	log.Fatal("Clear table plane error", zap.Error(err))
+	//}
 	// clear table KeyIntern
-	err = ClearTable(b.Db, &KeyIntern{})
-	if err != nil {
-		log.Fatal("Clear table KeyIntern error", zap.Error(err))
-	}
+	_ = ClearTable(b.Db, &KeyIntern{})
+	//if err != nil {
+	//	log.Fatal("Clear table KeyIntern error", zap.Error(err))
+	//}
 }
 
 func (b *BackUpManage) scanAllKeysFromDB() (IDKeyMap map[uint64]string, err error) {

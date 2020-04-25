@@ -308,10 +308,10 @@ func newStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, labelS
 func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
 	statInputMode := input.StatInputMode(cfg.StatInputMode)
 	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
-	isFileInputMode := statInputMode == input.FileInputMode
+	isPeriodicInputMode := statInputMode == input.PeriodicInputMode
 	defaultStatConfig.DataInterval = cfg.DataInterval
 	defaultStatConfig.MaxDelayTime = cfg.MaxDataDelay
-	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isFileInputMode, db)
+	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isPeriodicInputMode, db)
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
