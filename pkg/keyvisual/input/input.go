@@ -38,7 +38,7 @@ func NewStatInput(provider *region.PDDataProvider) StatInput {
 		endTime := time.Unix(provider.FileEndTime, 0)
 		return FileInput(provider.FilePath, startTime, endTime)
 	case SimulationMode:
-		return NewSimulationDB(1, 10000000)
+		return NewSimulationDB(TableNum, InitRegionNum)
 	default:
 		panic("unreachable")
 	}

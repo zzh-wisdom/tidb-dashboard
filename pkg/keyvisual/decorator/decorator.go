@@ -35,6 +35,10 @@ type LabelStrategy interface {
 // NaiveLabelStrategy is one of the simplest LabelStrategy.
 type NaiveLabelStrategy struct{}
 
+func NewNaiveLabelStrategy() LabelStrategy {
+	return NaiveLabelStrategy{}
+}
+
 // CrossBorder always returns false. So NaiveLabelStrategy believes that there are no cross-border situations.
 func (s NaiveLabelStrategy) CrossBorder(startKey, endKey string) bool {
 	return false

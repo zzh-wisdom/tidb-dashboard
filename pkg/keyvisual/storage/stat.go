@@ -198,12 +198,22 @@ func (s *layerStat) Range(startTime, endTime time.Time) (times []time.Time, axes
 	return times, axes
 }
 
+type StatTest int
+
+const (
+	NoTest                   StatTest = 0
+	BenchmarkRestore         StatTest = 1
+	BenchmarkAxisAppend      StatTest = 2
+	BenchmarkGenerateHeatmap StatTest = 3
+)
+
 // StatConfig is the configuration of Stat.
 type StatConfig struct {
 	LayersConfig []LayerConfig
 	ReportConfig
 	MaxDelayTime time.Duration
 	DataInterval time.Duration
+	StatTest
 }
 
 // Stat is composed of multiple layerStats.
@@ -220,6 +230,8 @@ type Stat struct {
 	maxDelayTime        time.Duration
 	dataInterval        time.Duration
 	isPeriodicInputMode bool
+
+	StatTest
 }
 
 // NewStat generates a Stat based on the configuration.
@@ -242,6 +254,7 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 		maxDelayTime:        cfg.MaxDelayTime,
 		dataInterval:        cfg.DataInterval,
 		isPeriodicInputMode: isPeriodicInputMode,
+		StatTest:            cfg.StatTest,
 	}
 
 	lc.Append(fx.Hook{
@@ -254,11 +267,22 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 	return s
 }
 
+// for test
+func (s *Stat) FillReport() {
+	s.reportManage.fillReport()
+}
+
 // Restore data from disk the first time service starts
 func (s *Stat) Restore(startTime time.Time) {
 	if !s.isPeriodicInputMode {
+		s.mutex.Lock()
+		if !s.reportManage.Db.HasTable(&Report{}) {
+			s.reportManage.Db.CreateTable(&Report{})
+		}
+		s.backUpManage.CreateTablesIfNotExists()
 		s.backUpManage.clean()
 		s.reportManage.clean()
+		s.mutex.Unlock()
 		return
 	}
 	log.Debug("keyviz: restore data from dbstore")
@@ -333,7 +357,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	if !s.reportManage.IsNeedReport(endTime) {
 		return
 	}
-	newMatrix := s.generateMatrix()
+	newMatrix := s.generateDbMatrix()
 	err := s.reportManage.InsertReport(newMatrix, endTime, s.dataInterval)
 	if err != nil {
 		log.Warn("InsertReport error", zap.Error(err))
@@ -357,7 +381,7 @@ func (s *Stat) FillData(regions region.RegionsInfo, endTime time.Time) {
 	}
 }
 
-func (s *Stat) generateMatrix() DbMatrix {
+func (s *Stat) generateDbMatrix() DbMatrix {
 	reportStartTime := s.reportManage.ReportTime.Add(-s.reportManage.ReportInterval)
 	reportEndTime := s.reportManage.ReportTime
 	log.Debug("new report", zap.Time("StartTime", reportStartTime), zap.Time("EndTime", reportEndTime), zap.Int64("EndTimeUnix", reportEndTime.Unix()))
@@ -373,6 +397,17 @@ func (s *Stat) generateMatrix() DbMatrix {
 		matrixes[i] = newMatrix
 	}
 	return CreateDbMatrix(matrixes)
+}
+
+func (s *Stat) GenerateMatrix() matrix.Matrix {
+	endTime := s.getLastestEndTime()
+	startTime := endTime.Add(-time.Hour * 24 * 7 * 5)
+
+	tag := region.WrittenBytes
+	plane := s.Range(startTime, endTime, "", "", tag)
+	log.Debug("GenerateMatrix", zap.Int("plane length", len(plane.Axes)))
+	newMatrix := plane.Pixel(s.strategy, s.reportManage.ReportMaxDisplayY, tag.String())
+	return newMatrix
 }
 
 func (s *Stat) rangeRoot(startTime, endTime time.Time) ([]time.Time, []MemAxis) {

@@ -16,8 +16,10 @@ package keyvisual
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -40,7 +42,7 @@ import (
 )
 
 const (
-	heatmapsMaxDisplayY = 1536 //200
+	heatmapsMaxDisplayY = 500 //1536 //200
 
 	distanceStrategyRatio = 1.0 / math.Phi
 	distanceStrategyLevel = 15
@@ -95,8 +97,9 @@ type Service struct {
 	httpClient *http.Client
 	db         *dbstore.DB
 
-	stat     *storage.Stat
-	strategy matrix.Strategy
+	statInput input.StatInput
+	stat      *storage.Stat
+	strategy  matrix.Strategy
 }
 
 func NewService(
@@ -136,6 +139,65 @@ func (s *Service) IsRunning() bool {
 	return s.status.IsRunning()
 }
 
+// for test
+func (s *Service) testAxisAppend() {
+	s.statInput = input.NewSimulationDB(3, 1)
+	s.statInput.Background(context.Background(), s.stat)
+	simulationInput := s.statInput.(*input.SimulationDB)
+	simulationInput.Resize(s.config.RegionNum)
+	TestN := 10
+	var regionsList = make([]*input.RegionsInfo, TestN)
+	var endTimeList = make([]time.Time, TestN)
+	for i := 0; i < TestN; i++ {
+		regionsList[i], endTimeList[i] = simulationInput.WorkAndGetInfo()
+		fmt.Printf("Num: %d, region length:%d\n", i, regionsList[i].Len())
+	}
+	statTime := time.Now()
+	for i := 0; i < TestN; i++ {
+		s.stat.Append(regionsList[i], endTimeList[i])
+	}
+	endTime := time.Now()
+	dur := endTime.Sub(statTime)
+	fmt.Printf("[Test] Append axis num: %d, region length: %v, spent time %v.\n", TestN, s.config.RegionNum, dur)
+	os.Exit(0)
+}
+
+func (s *Service) testStartTime() {
+	s.statInput = input.NewSimulationDB(3, 6000)
+	s.statInput.Background(context.Background(), s.stat)
+	s.stat.FillReport()
+
+	_ = s.Stop(context.Background())
+	s.config.StatTest = int(storage.NoTest)
+	s.config.StatInputMode = int(input.PeriodicInputMode)
+	s.provider.InputMode = int(input.PeriodicInputMode)
+	s.config.HeatmapStrategyMode = int(matrix.DistanceHeatmapStrategy)
+
+	statTime := time.Now()
+	_ = s.Start(context.Background())
+	endTime := time.Now()
+	dur := endTime.Sub(statTime)
+	fmt.Printf("[Test] Service start, Full of storage data, spent time %v.\n", dur)
+	os.Exit(0)
+}
+
+func (s *Service) testGenerateHeatmap() {
+	s.statInput = input.NewSimulationDB(3, 6000)
+	s.statInput.Background(context.Background(), s.stat)
+
+	var mtx matrix.Matrix
+	statTime := time.Now()
+	TestN := 10
+	for i := 0; i < TestN; i++ {
+		mtx = s.stat.GenerateMatrix()
+		fmt.Printf("[Test] heatmap %d, X: %d, Y: %d.\n", i, len(mtx.TimeAxis), len(mtx.Keys))
+	}
+	endTime := time.Now()
+	dur := endTime.Sub(statTime)
+	fmt.Printf("[Test] Generate heatmap num: %d, X: %d, Y: %d, spent time %v.\n", TestN, len(mtx.TimeAxis), len(mtx.Keys), dur)
+	os.Exit(0)
+}
+
 func (s *Service) Start(ctx context.Context) error {
 	if s.IsRunning() {
 		return nil
@@ -143,17 +205,25 @@ func (s *Service) Start(ctx context.Context) error {
 
 	s.ctx, s.cancel = context.WithCancel(ctx)
 
+	if s.config.StatTest != int(storage.NoTest) && s.config.StatInputMode != int(input.SimulationMode) {
+		panic("error parameters")
+	}
+	newStatFunc := newStat
+	if s.config.StatTest != int(storage.NoTest) && s.config.StatInputMode == int(input.SimulationMode) {
+		newStatFunc = newStatForTest
+	}
+
 	s.app = fx.New(
 		fx.Logger(utils.NewFxPrinter()),
 		fx.Provide(
 			newWaitGroup,
 			newStrategy,
-			newStat,
+			newStatFunc,
 			s.provideLocals,
 			input.NewStatInput,
 			decorator.TiDBLabelStrategy,
 		),
-		fx.Populate(&s.stat, &s.strategy),
+		fx.Populate(&s.statInput, &s.stat, &s.strategy),
 		fx.Invoke(
 			// Must be at the end
 			s.status.Register,
@@ -166,6 +236,19 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.app.Start(s.ctx); err != nil {
 		return err
 	}
+
+	statTest := storage.StatTest(s.config.StatTest)
+	if statTest != storage.NoTest && s.config.StatInputMode == int(input.SimulationMode) {
+		switch statTest {
+		case storage.BenchmarkAxisAppend:
+			s.testAxisAppend()
+		case storage.BenchmarkRestore:
+			s.testStartTime()
+		case storage.BenchmarkGenerateHeatmap:
+			s.testGenerateHeatmap()
+		}
+	}
+
 	return nil
 }
 
@@ -257,13 +340,13 @@ func (s *Service) heatmaps(c *gin.Context) {
 	baseTag := region.IntoTag(typ)
 
 	// TODO: for report test, which needs to be deleted later.
-	if endKey != "" || startKey != "" {
-		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey, baseTag)
-		if isFind {
-			c.JSON(http.StatusOK, resp)
-			return
-		}
-	}
+	//if endKey != "" || startKey != "" {
+	//	resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey, baseTag)
+	//	if isFind {
+	//		c.JSON(http.StatusOK, resp)
+	//		return
+	//	}
+	//}
 
 	if way == "report" {
 		resp, isFind := s.stat.GetReport(startTime, endTime, startKey, endKey, baseTag)
@@ -311,6 +394,7 @@ func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.S
 	isPeriodicInputMode := statInputMode == input.PeriodicInputMode
 	defaultStatConfig.DataInterval = cfg.DataInterval
 	defaultStatConfig.MaxDelayTime = cfg.MaxDataDelay
+	defaultStatConfig.StatTest = storage.StatTest(cfg.StatTest)
 	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isPeriodicInputMode, db)
 
 	lc.Append(fx.Hook{
@@ -324,6 +408,17 @@ func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.S
 		},
 	})
 
+	return stat
+}
+
+func newStatForTest(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.StatInput, strategy matrix.Strategy, db *dbstore.DB) *storage.Stat {
+	statInputMode := input.StatInputMode(cfg.StatInputMode)
+	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
+	isPeriodicInputMode := statInputMode == input.PeriodicInputMode
+	defaultStatConfig.DataInterval = cfg.DataInterval
+	defaultStatConfig.MaxDelayTime = cfg.MaxDataDelay
+	defaultStatConfig.StatTest = storage.StatTest(cfg.StatTest)
+	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isPeriodicInputMode, db)
 	return stat
 }
 

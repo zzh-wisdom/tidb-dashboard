@@ -73,7 +73,7 @@ run_fs_mg:
 	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 3
 
 run_s_d:
-	./bin/tidb-dashboard --debug --keyviz-input-mode 2 --max-data-delay 10m
+	./bin/tidb-dashboard --debug --keyviz-input-mode 2
 
 all:
 	make ui &&\
@@ -84,3 +84,29 @@ getter:
 
 run_getter:
 	./bin/get-regionsinfo --dir regions-default --interval 1s
+
+test_axis_append_5k:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 5000
+
+test_axis_append_10k:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 10000
+
+test_axis_append_50k:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 50000
+
+test_axis_append_100k:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 100000
+
+test_axis_append_500k:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 500000
+
+test_axis_append_1000k:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 1000000
+
+
+test_service_start:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1
+
+test_generate_heatmap:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3
+

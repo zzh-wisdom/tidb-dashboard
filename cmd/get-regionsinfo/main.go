@@ -74,7 +74,8 @@ func dataWrite(wg *sync.WaitGroup, ch chan *InfoUnit) {
 	if err != nil {
 		panic(fmt.Sprintf("Create file %s err %s", readMeFile, err.Error()))
 	}
-	readMeInfo := fmt.Sprintf("./bin/tidb-dashboard --debug --keyviz-file-start %v --keyviz-file-end %v --keyviz-file-path %s/%s --data-interval %s",
+	readMeInfo := fmt.Sprintf("./bin/tidb-dashboard --debug --keyviz-file-start %v --keyviz-file-end %v "+
+		"--keyviz-input-mode 1 --keyviz-file-path %s/%s --data-interval %s",
 		startTime.Unix(), endTime.Unix(), AllFilePath, *Dir, Interval.String())
 	_, _ = file.WriteString(readMeInfo)
 	file.Close()

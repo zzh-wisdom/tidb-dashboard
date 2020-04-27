@@ -195,6 +195,21 @@ func (b *BackUpManage) eraseKey(keys []string) error {
 	return b.Db.Where(IDs).Delete(&KeyIntern{}).Error
 }
 
+func (b *BackUpManage) CreateTablesIfNotExists() bool {
+	isExist1, err := CreateTableIfNotExists(b.Db, &DbPlane{})
+	if err != nil {
+		log.Panic("Create table Plane fail", zap.Error(err))
+	}
+	isExist2, err := CreateTableIfNotExists(b.Db, &KeyIntern{})
+	if err != nil {
+		log.Panic("Create table KeyIntern fail", zap.Error(err))
+	}
+	if isExist1 != isExist2 {
+		log.Panic("table Plane and KeyIntern should exist or not exist at the same time.")
+	}
+	return isExist1
+}
+
 // Restore restore all data from db
 func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 	//if !b.IsOpen {
@@ -209,18 +224,8 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 		}
 	}
 
-	isExist1, err := CreateTableIfNotExists(b.Db, &DbPlane{})
-	if err != nil {
-		log.Panic("Create table Plane fail", zap.Error(err))
-	}
-	isExist2, err := CreateTableIfNotExists(b.Db, &KeyIntern{})
-	if err != nil {
-		log.Panic("Create table KeyIntern fail", zap.Error(err))
-	}
-	if isExist1 != isExist2 {
-		log.Panic("table Plane and KeyIntern should exist or not exist at the same time.")
-	}
-	if !isExist1 {
+	isExist := b.CreateTablesIfNotExists()
+	if !isExist {
 		createStartDbPlanes()
 		return
 	}

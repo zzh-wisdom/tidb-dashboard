@@ -137,6 +137,13 @@ func NewReportManage(db *dbstore.DB, nowTime time.Time, cfg ReportConfig) *Repor
 	}
 }
 
+// for test
+func (r *ReportManage) fillReport() {
+	for r.Tail != r.Head || r.Empty {
+		_ = r.InsertReport(DbMatrix{}, r.ReportTime, time.Second)
+	}
+}
+
 func (r *ReportManage) RestoreReport() error {
 	if !r.Db.HasTable(&Report{}) {
 		return r.Db.CreateTable(&Report{}).Error

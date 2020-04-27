@@ -16,8 +16,7 @@ const (
 	// RegionStandardSize = 96 * 2<<10 * 2<<10
 	RegionMaxSize = 144 * 2 << 10 * 2 << 10
 
-	Interval          = time.Minute
-	SplitTimesPerWork = 2
+	Interval = time.Minute
 	// ThroughputPerWork = RegionMaxSize * SplitTimesPerWork
 
 	// RowKeySize = 19
@@ -33,11 +32,13 @@ const (
 	RowAndIndexRatio = RowKVSize / IndexKVSize
 
 	//for faster
-	RegionInfoPerWork = RegionMaxSize / 2
-	RowNumPerSplit    = RegionMaxSize / RowKVSize / 2
-	IndexNumPerSplit  = RowNumPerSplit
-	InitRegionNum     = 400
-	WorkTimes         = 60 + 60/2*7 + 60/6*16 + 60/30*24*6 + 24/4*28 //  5 * 7 * 24 * 60
+	RegionInfoPerWork         = RegionMaxSize / 2
+	RowNumPerSplit            = RegionMaxSize / RowKVSize / 2
+	IndexNumPerSplit          = RowNumPerSplit
+	TableNum                  = 3
+	SplitTimesPerTablePerWork = 1
+	InitRegionNum             = 1
+	WorkTimes                 = 60 + 60/2*7 + 60/6*16 + 60/30*24*6 + 24/4*28 //  5 * 7 * 24 * 60
 	// DetaRegionNUm = WorkTimes * MaxSplitTimesPerWork
 )
 
@@ -120,7 +121,7 @@ func NewTable(tableID int64, regionsLen, regionsCap int64, splitTimesPerWork int
 		tableType:           RowTable,
 		regions:             make([]*Region, regionsLen, regionsCap),
 		indexTable:          nil,
-		notZeroRegionsIndex: make([]int, 0, SplitTimesPerWork),
+		notZeroRegionsIndex: make([]int, 0, SplitTimesPerTablePerWork),
 		splitTimesPerWork:   splitTimesPerWork,
 	}
 	var startID int64 = 0
@@ -254,16 +255,15 @@ func (t *Table) resize(regionNum int64) {
 type SimulationDB struct {
 	Tables []*Table
 
-	IsResize        bool
-	NowTime         time.Time
-	TargetRegionNum int64
+	IsResize bool
+	NowTime  time.Time
+	//TargetRegionNum int64
 }
 
-func NewSimulationDB(tableNum int64, targetRegionNum int64) *SimulationDB {
+func NewSimulationDB(tableNum int64, initRegionNum int64) *SimulationDB {
 	s := &SimulationDB{
-		Tables:          make([]*Table, tableNum),
-		NowTime:         time.Now().Add(-Interval * WorkTimes),
-		TargetRegionNum: targetRegionNum,
+		Tables:  make([]*Table, tableNum),
+		NowTime: time.Now().Add(-Interval * WorkTimes),
 	}
 
 	//regionNumPerTable := targetRegionNum / tableNum + 1
@@ -279,12 +279,12 @@ func NewSimulationDB(tableNum int64, targetRegionNum int64) *SimulationDB {
 	//	panic("NewSimulationDB error")
 	//}
 
-	initTableRegionNum := InitRegionNum/tableNum + 1
+	initTableRegionNum := initRegionNum/tableNum + 1
 	for i := range s.Tables {
-		s.Tables[i] = NewTable(int64(i), initTableRegionNum, initTableRegionNum, SplitTimesPerWork)
+		s.Tables[i] = NewTable(int64(i), initTableRegionNum, initTableRegionNum, SplitTimesPerTablePerWork)
 	}
-	log.Info("Simulation", zap.Int64("Table", tableNum), zap.Int64("InitTableRegionNum", initTableRegionNum),
-		zap.Int64("target", s.TargetRegionNum), zap.Int("SplitTimesPerWork", SplitTimesPerWork), zap.Int("WorkTimes", WorkTimes))
+	log.Info("Simulation", zap.Int64("TableNum", tableNum), zap.Int64("InitTableRegionNum", initTableRegionNum),
+		zap.Int("SplitTimesPerTablePerWork", SplitTimesPerTablePerWork), zap.Int("WorkTimes", WorkTimes))
 	return s
 }
 
@@ -323,6 +323,20 @@ func (s *SimulationDB) Background(ctx context.Context, stat *storage.Stat) {
 
 		stat.FillData(regions, s.NowTime)
 	}
+	RegionNum := 0
+	for _, t := range s.Tables {
+		RegionNum += len(t.regions)
+		RegionNum += len(t.indexTable.regions)
+	}
+	log.Info("Background end", zap.Int("RegionNum", RegionNum))
+}
+
+func (s *SimulationDB) WorkAndGetInfo() (*RegionsInfo, time.Time) {
+	s.cleanInfo()
+	s.work()
+	regions := s.getRegionsInfo()
+	s.NowTime = s.NowTime.Add(Interval)
+	return regions, s.NowTime
 }
 
 func (s *SimulationDB) Resize(regionNum int64) {

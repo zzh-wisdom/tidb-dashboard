@@ -88,6 +88,9 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.IntVar(&cfg.KVInputMode, "keyviz-input-mode", 0, "(debug) The mode of getting regionsinfo")
 	// lab for keyvisual，hide help information
 	flag.IntVar(&cfg.CoreConfig.HeatmapStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
+	// test for keyvisual, hide help information
+	flag.IntVar(&cfg.CoreConfig.StatTest, "stat-test", 0, "(test) test type for stat")
+	flag.Int64Var(&cfg.CoreConfig.RegionNum, "region-num", 5000, "(test) the number of region")
 
 	clusterCaPath := flag.String("cluster-ca", "", "path of file that contains list of trusted SSL CAs.")
 	clusterCertPath := flag.String("cluster-cert", "", "path of file that contains X509 certificate in PEM format.")
@@ -101,6 +104,8 @@ func NewCLIConfig() *DashboardCLIConfig {
 	_ = flag.CommandLine.MarkHidden("keyviz-file-end")
 	_ = flag.CommandLine.MarkHidden("keyviz-file-path")
 	_ = flag.CommandLine.MarkHidden("matrix-strategy-mode")
+	_ = flag.CommandLine.MarkHidden("stat-test")
+	_ = flag.CommandLine.MarkHidden("region-num")
 
 	flag.Parse()
 
