@@ -91,6 +91,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	// test for keyvisual, hide help information
 	flag.IntVar(&cfg.CoreConfig.StatTest, "stat-test", 0, "(test) test type for stat")
 	flag.Int64Var(&cfg.CoreConfig.RegionNum, "region-num", 5000, "(test) the number of region")
+	flag.BoolVar(&cfg.CoreConfig.IsKeyIntern, "key-intern", false, "(test) If open key intern")
 
 	clusterCaPath := flag.String("cluster-ca", "", "path of file that contains list of trusted SSL CAs.")
 	clusterCertPath := flag.String("cluster-cert", "", "path of file that contains X509 certificate in PEM format.")

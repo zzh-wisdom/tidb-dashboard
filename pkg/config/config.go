@@ -28,8 +28,9 @@ type Config struct {
 	HeatmapStrategyMode int
 
 	// for test
-	StatTest  int
-	RegionNum int64
+	StatTest    int
+	RegionNum   int64
+	IsKeyIntern bool
 
 	// TLS config for mTLS authentication between TiDB components.
 	ClusterTLSConfig *tls.Config

@@ -103,9 +103,11 @@ test_axis_append_500k:
 test_axis_append_1000k:
 	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 1000000
 
+test_service_start_intern:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --key-intern
 
-test_service_start:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1
+test_service_start_no_intern:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --debug
 
 test_generate_heatmap:
 	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3

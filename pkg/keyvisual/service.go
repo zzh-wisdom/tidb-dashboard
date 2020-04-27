@@ -163,7 +163,7 @@ func (s *Service) testAxisAppend() {
 }
 
 func (s *Service) testStartTime() {
-	s.statInput = input.NewSimulationDB(3, 6000)
+	s.statInput = input.NewSimulationDB(5, 2000)
 	s.statInput.Background(context.Background(), s.stat)
 	s.stat.FillReport()
 
@@ -208,6 +208,10 @@ func (s *Service) Start(ctx context.Context) error {
 	if s.config.StatTest != int(storage.NoTest) && s.config.StatInputMode != int(input.SimulationMode) {
 		panic("error parameters")
 	}
+	defaultStatConfig.DataInterval = s.config.DataInterval
+	defaultStatConfig.MaxDelayTime = s.config.MaxDataDelay
+	defaultStatConfig.StatTest = storage.StatTest(s.config.StatTest)
+	defaultStatConfig.IsKeyIntern = s.config.IsKeyIntern
 	newStatFunc := newStat
 	if s.config.StatTest != int(storage.NoTest) && s.config.StatInputMode == int(input.SimulationMode) {
 		newStatFunc = newStatForTest
@@ -392,9 +396,6 @@ func newStat(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in input.S
 	statInputMode := input.StatInputMode(cfg.StatInputMode)
 	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
 	isPeriodicInputMode := statInputMode == input.PeriodicInputMode
-	defaultStatConfig.DataInterval = cfg.DataInterval
-	defaultStatConfig.MaxDelayTime = cfg.MaxDataDelay
-	defaultStatConfig.StatTest = storage.StatTest(cfg.StatTest)
 	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isPeriodicInputMode, db)
 
 	lc.Append(fx.Hook{
@@ -415,9 +416,6 @@ func newStatForTest(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, in 
 	statInputMode := input.StatInputMode(cfg.StatInputMode)
 	log.Debug("stat input mode", zap.String("Mode", statInputMode.String()))
 	isPeriodicInputMode := statInputMode == input.PeriodicInputMode
-	defaultStatConfig.DataInterval = cfg.DataInterval
-	defaultStatConfig.MaxDelayTime = cfg.MaxDataDelay
-	defaultStatConfig.StatTest = storage.StatTest(cfg.StatTest)
 	stat := storage.NewStat(lc, defaultStatConfig, strategy, in.GetStartTime(), isPeriodicInputMode, db)
 	return stat
 }

@@ -45,7 +45,7 @@ func (DbPlane) TableName() string {
 	return tableDbPlaneName
 }
 
-func NewDbPlane(num uint8, time time.Time, axis DbAxis) (*DbPlane, error) {
+func NewDbPlane(num uint8, time time.Time, axis interface{}) (*DbPlane, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(axis)
@@ -67,6 +67,14 @@ func (dp DbPlane) unmarshalDbAxis() (DbAxis, error) {
 	return axis, err
 }
 
+func (dp DbPlane) unmarshalMemAxis() (MemAxis, error) {
+	var buf = bytes.NewBuffer(dp.AxisGobEncode)
+	dec := gob.NewDecoder(buf)
+	var axis MemAxis
+	err := dec.Decode(&axis)
+	return axis, err
+}
+
 type keyCount struct {
 	Key   string
 	Count uint
@@ -82,38 +90,45 @@ func newKeyCount(key string) *keyCount {
 type BackUpManage struct {
 	Db *dbstore.DB
 	sync.Map
+	IsKeyIntern bool
 }
 
-func NewBackUpManage(db *dbstore.DB) *BackUpManage {
+func NewBackUpManage(db *dbstore.DB, isKeyIntern bool) *BackUpManage {
+	log.Info("NewBackUpManage", zap.Bool("IsKeyIntern", isKeyIntern))
 	return &BackUpManage{
-		Db:  db,
-		Map: sync.Map{},
+		Db:          db,
+		Map:         sync.Map{},
+		IsKeyIntern: isKeyIntern,
 		//IsOpen: isOpen,
 	}
 }
 
 func (b *BackUpManage) InsertDbPlane(num uint8, time time.Time, axis MemAxis) error {
-	err := b.SaveKeys(axis.KeysList)
-	if err != nil {
-		return err
-	}
-	//if !b.IsOpen {
-	//	return nil
-	//}
-
-	newAxis := DbAxis{
-		KeysList:   make([][]uint64, len(axis.KeysList)),
-		ValuesList: axis.ValuesList,
-		IsSep:      axis.IsSep,
-	}
-	for i, keys := range axis.KeysList {
-		ids := make([]uint64, len(keys))
-		for j, key := range keys {
-			ids[j] = getKeyID(key)
+	if b.IsKeyIntern {
+		err := b.SaveKeys(axis.KeysList)
+		if err != nil {
+			return err
 		}
-		newAxis.KeysList[i] = ids
+		newAxis := DbAxis{
+			KeysList:   make([][]uint64, len(axis.KeysList)),
+			ValuesList: axis.ValuesList,
+			IsSep:      axis.IsSep,
+		}
+		for i, keys := range axis.KeysList {
+			ids := make([]uint64, len(keys))
+			for j, key := range keys {
+				ids[j] = getKeyID(key)
+			}
+			newAxis.KeysList[i] = ids
+		}
+		plane, err := NewDbPlane(num, time, newAxis)
+		if err != nil {
+			return err
+		}
+		return b.Db.Create(plane).Error
 	}
-	plane, err := NewDbPlane(num, time, newAxis)
+
+	plane, err := NewDbPlane(num, time, axis)
 	if err != nil {
 		return err
 	}
@@ -150,13 +165,12 @@ func (b *BackUpManage) storeKey(key string) error {
 }
 
 func (b *BackUpManage) DeleteDbPlane(num uint8, time time.Time, axis MemAxis) error {
-	err := b.DeletKeys(axis.KeysList)
-	if err != nil {
-		return err
+	if b.IsKeyIntern {
+		err := b.DeletKeys(axis.KeysList)
+		if err != nil {
+			return err
+		}
 	}
-	//if !b.IsOpen {
-	//	return nil
-	//}
 	return b.Db.
 		Where("layer_num = ? AND time = ?", num, time).
 		Delete(&DbPlane{}).
@@ -212,6 +226,15 @@ func (b *BackUpManage) CreateTablesIfNotExists() bool {
 
 // Restore restore all data from db
 func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
+	if b.IsKeyIntern {
+		b.RestoreWithKeyIntern(stat, nowTime)
+	} else {
+		b.RestoreWithNoKeyIntern(stat, nowTime)
+	}
+}
+
+// Restore restore all data from db
+func (b *BackUpManage) RestoreWithKeyIntern(stat *Stat, nowTime time.Time) {
 	//if !b.IsOpen {
 	//	return
 	//}
@@ -257,7 +280,7 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 				log.Fatal("Clear table plane", zap.Error(err))
 			}
 			createStartDbPlanes()
-			break
+			return
 		}
 
 		log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1))
@@ -308,6 +331,67 @@ func (b *BackUpManage) Restore(stat *Stat, nowTime time.Time) {
 			if err != nil {
 				log.Fatal("InsertDbPlane error", zap.Error(err))
 			}
+		}
+	}
+}
+
+// Restore restore all data from db
+func (b *BackUpManage) RestoreWithNoKeyIntern(stat *Stat, nowTime time.Time) {
+	layerCount := len(stat.layers)
+	// establish start `Plane` for each layer
+	createStartDbPlanes := func() {
+		for i := 0; i < layerCount; i++ {
+			err := b.InsertDbPlane(uint8(i), nowTime, MemAxis{})
+			log.Debug("Insert startTime plane", zap.Uint8("Num", uint8(i)), zap.Time("StartTime", nowTime), zap.Error(err))
+		}
+	}
+
+	isExist := b.CreateTablesIfNotExists()
+	if !isExist {
+		createStartDbPlanes()
+		return
+	}
+
+	for num := 0; num < layerCount; num++ {
+		planes, err := b.findDbPlaneOrderByTime(uint8(num))
+		if err != nil {
+			break
+		}
+		if len(planes) == 0 && num == 0 {
+			createStartDbPlanes()
+			break
+		} else if len(planes) == 0 {
+			break
+		}
+		if len(planes) == 1 && num == 0 {
+			// no valid data was stored，clear
+			err := ClearTable(b.Db, &DbPlane{})
+			log.Debug("Clear table plane")
+			if err != nil {
+				log.Fatal("Clear table plane", zap.Error(err))
+			}
+			createStartDbPlanes()
+			break
+		}
+
+		log.Debug("Load planes", zap.Uint8("Num", uint8(num)), zap.Int("Len", len(planes)-1))
+		stat.layers[num].Empty = len(planes) <= 1
+		stat.layers[num].StartTime = planes[0].Time
+		stat.layers[num].Head = 0
+		n := len(planes) - 1
+		if n > stat.layers[num].Len {
+			log.Fatal("n cannot be longer than layers[num].Len", zap.Int("n", n), zap.Int("layers[num].Len", stat.layers[num].Len), zap.Int("num", num))
+		}
+		stat.layers[num].EndTime = planes[n].Time
+		stat.layers[num].Tail = (stat.layers[num].Head + n) % stat.layers[num].Len
+
+		for i, plane := range planes[1:] {
+			axis, err := plane.unmarshalMemAxis()
+			if err != nil {
+				log.Fatal("unexpected error", zap.Error(err))
+			}
+			stat.layers[num].RingTimes[i] = plane.Time
+			stat.layers[num].RingAxes[i] = axis
 		}
 	}
 }

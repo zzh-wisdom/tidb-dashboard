@@ -16,6 +16,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -210,6 +211,7 @@ const (
 // StatConfig is the configuration of Stat.
 type StatConfig struct {
 	LayersConfig []LayerConfig
+	IsKeyIntern  bool
 	ReportConfig
 	MaxDelayTime time.Duration
 	DataInterval time.Duration
@@ -237,7 +239,7 @@ type Stat struct {
 // NewStat generates a Stat based on the configuration.
 func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTime time.Time, isPeriodicInputMode bool, db *dbstore.DB) *Stat {
 	layers := make([]*layerStat, len(cfg.LayersConfig))
-	bum := NewBackUpManage(db)
+	bum := NewBackUpManage(db, cfg.IsKeyIntern)
 
 	for i, c := range cfg.LayersConfig {
 		layers[i] = newLayerStat(uint8(i), c, strategy, startTime, bum)
@@ -269,7 +271,10 @@ func NewStat(lc fx.Lifecycle, cfg StatConfig, strategy matrix.Strategy, startTim
 
 // for test
 func (s *Stat) FillReport() {
-	s.reportManage.fillReport()
+	s.reportManage.ReportTime = s.layers[0].EndTime
+	report := s.generateDbMatrix()
+	fmt.Printf("[Test] FillReport, X:%d\n", len(report.TimeAxis))
+	s.reportManage.fillReport(report)
 }
 
 // Restore data from disk the first time service starts
