@@ -24,6 +24,9 @@ type Config struct {
 	DataInterval time.Duration
 	MaxDataDelay time.Duration
 
+	DecoratorMode string
+	KVSeparator string
+
 	StatInputMode       int
 	HeatmapStrategyMode int
 

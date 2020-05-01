@@ -44,6 +44,7 @@ func CreateStorageAxisFromRegions(regions region.RegionsInfo, strategy matrix.St
 		keysList[i] = keys
 		valuesList[i] = regions.GetValues(tag)
 	}
+	//fmt.Println(keys)
 
 	preAxis := CreateMemAxis(keysList, valuesList)
 	wash(&preAxis)

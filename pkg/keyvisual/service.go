@@ -228,7 +228,7 @@ func (s *Service) Start(ctx context.Context) error {
 			newStatFunc,
 			s.provideLocals,
 			input.NewStatInput,
-			decorator.TiDBLabelStrategy,
+			decorator.BuildLabelStrategy,
 		),
 		fx.Populate(&s.statInput, &s.stat, &s.strategy),
 		fx.Invoke(

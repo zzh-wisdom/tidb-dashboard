@@ -81,6 +81,9 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.DurationVar(&cfg.CoreConfig.DataInterval, "data-interval", time.Minute, "The interval between each time getting data from PD")
 	flag.DurationVar(&cfg.CoreConfig.MaxDataDelay, "max-data-delay", time.Minute, "The max delay time between each regionsinfo data")
 	flag.BoolVar(&cfg.EnableDebugLog, "debug", false, "Enable debug logs")
+	// for keyviz decorator
+	flag.StringVar(&cfg.CoreConfig.DecoratorMode, "mode", "db", "The mode of keyviz decorator")
+	flag.StringVar(&cfg.CoreConfig.KVSeparator, "keyviz-kv-separator", "/", "The separator of key when in kv mode")
 	// debug for keyvisual，hide help information
 	flag.Int64Var(&cfg.KVFileStartTime, "keyviz-file-start", 0, "(debug) start time for file range in file mode")
 	flag.Int64Var(&cfg.KVFileEndTime, "keyviz-file-end", 0, "(debug) end time for file range in file mode")

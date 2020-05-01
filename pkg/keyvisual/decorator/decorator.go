@@ -16,6 +16,13 @@ package decorator
 
 import (
 	"encoding/hex"
+	"net/http"
+	"sync"
+
+	"go.uber.org/fx"
+
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
 )
 
 // LabelKey is the decoration key.
@@ -37,6 +44,18 @@ type NaiveLabelStrategy struct{}
 
 func NewNaiveLabelStrategy() LabelStrategy {
 	return NaiveLabelStrategy{}
+}
+
+// BuildLabelStrategy create LabelStrategy according to the parameters in `cfg`
+func BuildLabelStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, provider *region.PDDataProvider, httpClient *http.Client) LabelStrategy {
+	switch cfg.DecoratorMode {
+	case "db":
+		return TiDBLabelStrategy(lc, wg, cfg, provider, httpClient)
+	case "kv":
+		return SeparatorLabelStrategy(cfg.KVSeparator)
+	default:
+		panic("unreachable")
+	}
 }
 
 // CrossBorder always returns false. So NaiveLabelStrategy believes that there are no cross-border situations.

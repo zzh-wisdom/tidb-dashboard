@@ -2,14 +2,13 @@ package input
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 
-	regionpkg "github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
 	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/storage"
-	"github.com/pingcap-incubator/tidb-dashboard/pkg/tidb/codec"
 )
 
 const (
@@ -35,10 +34,10 @@ const (
 	RegionInfoPerWork         = RegionMaxSize / 2
 	RowNumPerSplit            = RegionMaxSize / RowKVSize / 2
 	IndexNumPerSplit          = RowNumPerSplit
-	TableNum                  = 3
+	TableNum                  = 4
 	SplitTimesPerTablePerWork = 1
 	InitRegionNum             = 1
-	WorkTimes                 = 60 + 60/2*7 + 60/6*16 + 60/30*24*6 + 24/4*28 //  5 * 7 * 24 * 60
+	WorkTimes                 = 10 //  5 * 7 * 24 * 60
 	// DetaRegionNUm = WorkTimes * MaxSplitTimesPerWork
 )
 
@@ -213,9 +212,9 @@ func (t *Table) cleanInfo() {
 
 func (t *Table) getRegionsInfo() *RegionsInfo {
 	var indexRegionsInfo = &RegionsInfo{}
-	if t.indexTable != nil {
-		indexRegionsInfo = t.indexTable.getRegionsInfo()
-	}
+	//if t.indexTable != nil {
+	//	indexRegionsInfo = t.indexTable.getRegionsInfo()
+	//}
 
 	length := len(t.regions)
 	rowRegionsInfo := &RegionsInfo{
@@ -301,13 +300,16 @@ func (s *SimulationDB) cleanInfo() {
 }
 
 func (s *SimulationDB) getRegionsInfo() *RegionsInfo {
-	regionsInfo := &RegionsInfo{}
+	regions := &RegionsInfo{}
 	for _, t := range s.Tables {
 		info := t.getRegionsInfo()
-		regionsInfo.Count += info.Count
-		regionsInfo.Regions = append(regionsInfo.Regions, info.Regions...)
+		regions.Count += info.Count
+		regions.Regions = append(regions.Regions, info.Regions...)
 	}
-	return regionsInfo
+	//sort.Slice(regions.Regions, func(i, j int) bool {
+	//	return regions.Regions[i].StartKey < regions.Regions[j].StartKey
+	//})
+	return regions
 }
 
 func (s *SimulationDB) GetStartTime() time.Time {
@@ -368,16 +370,18 @@ var (
 
 func buildRowKey(tableID, rowID int64) string {
 	// return regionpkg.String(tablePrefix)+strconv.Itoa(int(tableID))+regionpkg.String(rowPrefixSep)+strconv.Itoa(int(rowID))
-	tableBytes := codec.EncodeInt(tablePrefix, tableID)
-	rowBytes := codec.EncodeInt(rowPrefixSep, rowID)
-	result := append(tableBytes, rowBytes...)
-	return regionpkg.String(codec.EncodeBytes(result))
+	//tableBytes := codec.EncodeInt(tablePrefix, tableID)
+	//rowBytes := codec.EncodeInt(rowPrefixSep, rowID)
+	//result := append(tableBytes, rowBytes...)
+	//return regionpkg.String(codec.EncodeBytes(result))
+	return fmt.Sprintf("%08d/%08d/%08d", tableID, tableID, rowID)
 }
 
 func buildIndexKey(tableID, indexID int64) string {
 	// return regionpkg.String(tablePrefix)+strconv.Itoa(int(tableID))+regionpkg.String(indexPrefixSep)+strconv.Itoa(int(indexID))
-	tableBytes := codec.EncodeInt(tablePrefix, tableID)
-	indexBytes := codec.EncodeInt(indexPrefixSep, indexID)
-	result := append(tableBytes, indexBytes...)
-	return regionpkg.String(codec.EncodeBytes(result))
+	//tableBytes := codec.EncodeInt(tablePrefix, tableID)
+	//indexBytes := codec.EncodeInt(indexPrefixSep, indexID)
+	//result := append(tableBytes, indexBytes...)
+	//return regionpkg.String(codec.EncodeBytes(result))
+	return fmt.Sprintf("%08d/%08d/%08d", tableID, tableID, indexID)
 }
