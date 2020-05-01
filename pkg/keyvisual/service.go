@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	heatmapsMaxDisplayY = 500 //1536 //200
+	heatmapsMaxDisplayY = 1536 //200
 
 	distanceStrategyRatio = 1.0 / math.Phi
 	distanceStrategyLevel = 15
@@ -141,8 +141,10 @@ func (s *Service) IsRunning() bool {
 
 // for test
 func (s *Service) testAxisAppend() {
-	s.statInput = input.NewSimulationDB(3, 1)
+	s.statInput = input.NewSimulationDB(2, 3400)
 	s.statInput.Background(context.Background(), s.stat)
+	max, min := s.stat.GetAxisMaxAndMinKeysCount()
+	log.Info("Axis keys length", zap.Int("max", max), zap.Int("min", min))
 	simulationInput := s.statInput.(*input.SimulationDB)
 	simulationInput.Resize(s.config.RegionNum)
 	TestN := 10
@@ -163,9 +165,10 @@ func (s *Service) testAxisAppend() {
 }
 
 func (s *Service) testStartTime() {
-	s.statInput = input.NewSimulationDB(5, 2000)
+	s.statInput = input.NewSimulationDB(2, 3400)
 	s.statInput.Background(context.Background(), s.stat)
-	s.stat.FillReport()
+	//s.stat.FillReport()
+	s.stat.ClearReport()
 
 	_ = s.Stop(context.Background())
 	s.config.StatTest = int(storage.NoTest)
@@ -182,7 +185,7 @@ func (s *Service) testStartTime() {
 }
 
 func (s *Service) testGenerateHeatmap() {
-	s.statInput = input.NewSimulationDB(3, 6000)
+	s.statInput = input.NewSimulationDB(2, 3400)
 	s.statInput.Background(context.Background(), s.stat)
 
 	var mtx matrix.Matrix

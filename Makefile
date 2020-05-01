@@ -86,29 +86,38 @@ run_getter:
 	./bin/get-regionsinfo --dir regions-default --interval 1s
 
 test_axis_append_5k:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 5000
+	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 5000
 
 test_axis_append_10k:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 10000
+	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 10000
 
 test_axis_append_50k:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 50000
+	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 50000
 
 test_axis_append_100k:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 100000
+	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 100000
 
 test_axis_append_500k:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 500000
+	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 500000
 
 test_axis_append_1000k:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 2 --region-num 1000000
+	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 1000000
 
 test_service_start_intern:
 	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --key-intern
 
 test_service_start_no_intern:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --debug
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1
 
-test_generate_heatmap:
-	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3
 
+test_generate_heatmap_d:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3 --key-intern
+
+test_generate_heatmap_a:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3 --key-intern --matrix-strategy-mode 1
+
+test_generate_heatmap_mb:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3 --key-intern --matrix-strategy-mode 2
+
+test_generate_heatmap_mg:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3 --key-intern --matrix-strategy-mode 3

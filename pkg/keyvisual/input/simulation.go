@@ -14,7 +14,7 @@ import (
 
 const (
 	// RegionStandardSize = 96 * 2<<10 * 2<<10
-	RegionMaxSize = 144 * 2 << 10 * 2 << 10
+	RegionMaxSize = 144 * (1 << 10) * (1 << 10)
 
 	Interval = time.Minute
 	// ThroughputPerWork = RegionMaxSize * SplitTimesPerWork
@@ -342,6 +342,14 @@ func (s *SimulationDB) WorkAndGetInfo() (*RegionsInfo, time.Time) {
 func (s *SimulationDB) Resize(regionNum int64) {
 	if s.IsResize {
 		panic("Can't resize twice")
+	}
+	RegionNum := 0
+	for _, t := range s.Tables {
+		RegionNum += len(t.regions)
+		RegionNum += len(t.indexTable.regions)
+	}
+	if regionNum <= int64(RegionNum) {
+		return
 	}
 	s.IsResize = true
 

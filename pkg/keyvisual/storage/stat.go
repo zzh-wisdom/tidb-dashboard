@@ -277,6 +277,10 @@ func (s *Stat) FillReport() {
 	s.reportManage.fillReport(report)
 }
 
+func (s *Stat) ClearReport() {
+	s.reportManage.clean()
+}
+
 // Restore data from disk the first time service starts
 func (s *Stat) Restore(startTime time.Time) {
 	if !s.isPeriodicInputMode {
@@ -370,6 +374,7 @@ func (s *Stat) Append(regions region.RegionsInfo, endTime time.Time) {
 	log.Debug("next report time", zap.Time("ReportTime", s.reportManage.ReportTime), zap.Int64("EndTimeUnix", s.reportManage.ReportTime.Unix()))
 }
 
+// for test
 func (s *Stat) FillData(regions region.RegionsInfo, endTime time.Time) {
 	if regions.Len() == 0 {
 		return
@@ -384,6 +389,24 @@ func (s *Stat) FillData(regions region.RegionsInfo, endTime time.Time) {
 			return
 		}
 	}
+}
+
+func (s *Stat) GetAxisMaxAndMinKeysCount() (max int, min int) {
+	max = 0
+	min = 1 << 30
+	for _, layer := range s.layers {
+		for _, axis := range layer.RingAxes {
+			for _, keys := range axis.KeysList {
+				if len(keys) > max {
+					max = len(keys)
+				}
+				if len(keys) < min {
+					min = len(keys)
+				}
+			}
+		}
+	}
+	return
 }
 
 func (s *Stat) generateDbMatrix() DbMatrix {
