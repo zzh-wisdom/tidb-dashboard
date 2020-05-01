@@ -76,6 +76,9 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.StringVar(&cfg.CoreConfig.DataDir, "data-dir", "/tmp/dashboard-data", "Path to the Dashboard Server data directory")
 	flag.StringVar(&cfg.CoreConfig.PDEndPoint, "pd", "http://127.0.0.1:2379", "The PD endpoint that Dashboard Server connects to")
 	flag.BoolVar(&cfg.EnableDebugLog, "debug", false, "Enable debug logs")
+	// for keyviz decorator
+	flag.StringVar(&cfg.CoreConfig.DecoratorMode, "mode", "db", "The mode of keyviz decorator")
+	flag.StringVar(&cfg.CoreConfig.KVSeparator, "keyviz-kv-separator", "/", "The separator of key when in kv mode")
 	// debug for keyvisual，hide help information
 	flag.Int64Var(&cfg.KVFileStartTime, "keyviz-file-start", 0, "(debug) start time for file range in file mode")
 	flag.Int64Var(&cfg.KVFileEndTime, "keyviz-file-end", 0, "(debug) end time for file range in file mode")

@@ -16,6 +16,13 @@ package decorator
 
 import (
 	"encoding/hex"
+	"net/http"
+	"sync"
+
+	"go.uber.org/fx"
+
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/config"
+	"github.com/pingcap-incubator/tidb-dashboard/pkg/keyvisual/region"
 )
 
 // LabelKey is the decoration key.
@@ -30,6 +37,18 @@ type LabelStrategy interface {
 	Label(key string) LabelKey
 	LabelGlobalStart() LabelKey
 	LabelGlobalEnd() LabelKey
+}
+
+// BuildLabelStrategy create LabelStrategy according to the parameters in `cfg`
+func BuildLabelStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config, provider *region.PDDataProvider, httpClient *http.Client) LabelStrategy {
+	switch cfg.DecoratorMode {
+	case "db":
+		return TiDBLabelStrategy(lc, wg, cfg, provider, httpClient)
+	case "kv":
+		return SeparatorLabelStrategy(cfg.KVSeparator)
+	default:
+		panic("unreachable")
+	}
 }
 
 // NaiveLabelStrategy is one of the simplest LabelStrategy.

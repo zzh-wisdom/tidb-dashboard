@@ -131,7 +131,7 @@ func (s *Service) Start(ctx context.Context) error {
 			newStat,
 			s.provideLocals,
 			input.NewStatInput,
-			decorator.TiDBLabelStrategy,
+			decorator.BuildLabelStrategy,
 		),
 		fx.Populate(&s.stat, &s.strategy),
 		fx.Invoke(
