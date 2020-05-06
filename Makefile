@@ -123,4 +123,4 @@ test_generate_heatmap_mg:
 	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 3 --key-intern --matrix-strategy-mode 3
 
 test_sep:
-	./bin/tidb-dashboard --debug  --key-intern --keyviz-input-mode 2 --mode kv
+	./bin/tidb-dashboard --debug  --key-intern --keyviz-input-mode 2 --mode kv --keyviz-kv-separator +

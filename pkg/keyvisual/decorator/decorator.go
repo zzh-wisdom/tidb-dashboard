@@ -52,7 +52,7 @@ func BuildLabelStrategy(lc fx.Lifecycle, wg *sync.WaitGroup, cfg *config.Config,
 	case "db":
 		return TiDBLabelStrategy(lc, wg, cfg, provider, httpClient)
 	case "kv":
-		return SeparatorLabelStrategy(cfg.KVSeparator)
+		return SeparatorLabelStrategy(cfg)
 	default:
 		panic("unreachable")
 	}

@@ -374,7 +374,7 @@ func buildRowKey(tableID, rowID int64) string {
 	//rowBytes := codec.EncodeInt(rowPrefixSep, rowID)
 	//result := append(tableBytes, rowBytes...)
 	//return regionpkg.String(codec.EncodeBytes(result))
-	return fmt.Sprintf("%08d/%08d/%08d", tableID, tableID, rowID)
+	return fmt.Sprintf("%08d/%08d+%08d", tableID, tableID, rowID)
 }
 
 func buildIndexKey(tableID, indexID int64) string {
@@ -383,5 +383,5 @@ func buildIndexKey(tableID, indexID int64) string {
 	//indexBytes := codec.EncodeInt(indexPrefixSep, indexID)
 	//result := append(tableBytes, indexBytes...)
 	//return regionpkg.String(codec.EncodeBytes(result))
-	return fmt.Sprintf("%08d/%08d/%08d", tableID, tableID, indexID)
+	return fmt.Sprintf("%08d/%08d+%08d", tableID, tableID, indexID)
 }
