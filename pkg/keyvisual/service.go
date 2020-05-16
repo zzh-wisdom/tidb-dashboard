@@ -167,8 +167,11 @@ func (s *Service) testAxisAppend() {
 func (s *Service) testStartTime() {
 	s.statInput = input.NewSimulationDB(2, 3400)
 	s.statInput.Background(context.Background(), s.stat)
-	//s.stat.FillReport()
-	s.stat.ClearReport()
+	if s.config.IsReportPersist {
+		s.stat.FillReport()
+	} else {
+		s.stat.ClearReport()
+	}
 
 	_ = s.Stop(context.Background())
 	s.config.StatTest = int(storage.NoTest)
@@ -210,6 +213,9 @@ func (s *Service) Start(ctx context.Context) error {
 
 	if s.config.StatTest != int(storage.NoTest) && s.config.StatInputMode != int(input.SimulationMode) {
 		panic("error parameters")
+	}
+	if s.config.StatTest == int(storage.NoTest) && !s.config.IsKeyIntern {
+		log.Warn("error parameters, IsKeyIntern should be true")
 	}
 	defaultStatConfig.DataInterval = s.config.DataInterval
 	defaultStatConfig.MaxDelayTime = s.config.MaxDataDelay

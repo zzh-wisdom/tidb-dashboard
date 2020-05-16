@@ -45,35 +45,35 @@ all_server:
 	UI=1 SWAGGER=1 make server
 
 run:
-	bin/tidb-dashboard --debug
+	bin/tidb-dashboard --debug --key-intern
 
 run_p_d:
-	bin/tidb-dashboard --debug
+	bin/tidb-dashboard --debug --key-intern
 
 run_p_a:
-	bin/tidb-dashboard --debug --matrix-strategy-mode 1
+	bin/tidb-dashboard --debug --key-intern --matrix-strategy-mode 1
 
 run_p_mb:
-	bin/tidb-dashboard --debug --matrix-strategy-mode 2
+	bin/tidb-dashboard --debug --key-intern --matrix-strategy-mode 2
 
 run_p_mg:
-	bin/tidb-dashboard --debug --matrix-strategy-mode 3
+	bin/tidb-dashboard --debug --key-intern --matrix-strategy-mode 3
 
 
 run_fs_d:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m
+	./bin/tidb-dashboard --debug --key-intern --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m
 
 run_fs_a:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 1
+	./bin/tidb-dashboard --debug --key-intern --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 1
 
 run_fs_mb:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 2
+	./bin/tidb-dashboard --debug --key-intern --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 2
 
 run_fs_mg:
-	./bin/tidb-dashboard --debug --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 3
+	./bin/tidb-dashboard --debug --key-intern --keyviz-file-start 1574992800 --keyviz-file-end 1575064800 --keyviz-input-mode 1 --max-data-delay 10m --matrix-strategy-mode 3
 
 run_s_d:
-	./bin/tidb-dashboard --debug --keyviz-input-mode 2
+	./bin/tidb-dashboard --debug --key-intern --keyviz-input-mode 2
 
 all:
 	make ui &&\
@@ -103,10 +103,17 @@ test_axis_append_500k:
 test_axis_append_1000k:
 	./bin/tidb-dashboard --key-intern --keyviz-input-mode 2 --stat-test 2 --region-num 1000000
 
-test_service_start_intern:
+
+test_service_start_intern_report:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --key-intern --report-persist
+
+test_service_start_no-intern_report:
+	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --report-persist
+
+test_service_start_intern_no-report:
 	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1 --key-intern
 
-test_service_start_no_intern:
+test_service_start_no-intern_no-report:
 	./bin/tidb-dashboard --keyviz-input-mode 2 --stat-test 1
 
 

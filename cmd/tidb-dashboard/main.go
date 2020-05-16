@@ -90,6 +90,7 @@ func NewCLIConfig() *DashboardCLIConfig {
 	flag.IntVar(&cfg.CoreConfig.HeatmapStrategyMode, "matrix-strategy-mode", 0, "(lab) strategy mode for generating matrix")
 	// test for keyvisual, hide help information
 	flag.IntVar(&cfg.CoreConfig.StatTest, "stat-test", 0, "(test) test type for stat")
+	flag.BoolVar(&cfg.CoreConfig.IsReportPersist, "report-persist", false, "(test) If open report persist")
 	flag.Int64Var(&cfg.CoreConfig.RegionNum, "region-num", 5000, "(test) the number of region")
 	flag.BoolVar(&cfg.CoreConfig.IsKeyIntern, "key-intern", false, "(test) If open key intern")
 
